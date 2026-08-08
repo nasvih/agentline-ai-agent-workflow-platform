@@ -1,7 +1,7 @@
 /* Settings — workspace level configuration, and the reset. */
 
-import { h, icon, num, fmtDate, toast, confirmDialog, downloadCSV } from '../../lib/ui.js';
-import { MODELS, rupees } from '../data.js';
+import { h, icon, num, fmtDate, fmtTime, ago, toast, modal, confirmDialog, downloadCSV } from '../../lib/ui.js';
+import { MODELS, rupees, agentById } from '../data.js';
 
 const ENVIRONMENTS = ['sandbox', 'staging', 'production'];
 const REGIONS = ['ap-south · Mumbai', 'ap-southeast · Singapore', 'me-central · Dammam', 'eu-west · Dublin'];
@@ -108,6 +108,29 @@ export function render(ctx) {
             h('dt', {}, 'Seeded'), h('dd', {}, fmtDate(s.createdAt))),
           h('div', { class: 'btnrow', style: 'margin-top:14px' },
             h('button', { class: 'btn btn--sm', onclick: exportAll, html: `${icon('download')}<span>Export agents CSV</span>` }))),
+
+        h('div', { class: 'card' },
+          h('div', { class: 'card__head' },
+            h('h3', {}, 'Stored reports'),
+            h('span', { class: 'label' }, `${(s.reports || []).length} held`)),
+          (s.reports || []).length
+            ? h('div', { class: 'stack' }, (s.reports || []).map((r) => h('div', { class: 'stored' },
+              h('div', { style: 'flex:1;min-width:0' },
+                h('div', { class: 'stored__title' }, r.title),
+                h('div', { class: 'small muted' }, `${r.id} · ${(agentById(s, r.agentId) || {}).name || r.agentId} · ${ago(r.createdAt)}`)),
+              h('button', {
+                class: 'btn btn--sm',
+                onclick: () => modal({
+                  title: r.title,
+                  width: '560px',
+                  body: h('div', {},
+                    h('div', { class: 'label', style: 'margin-bottom:8px' }, `${r.id} · written ${fmtDate(r.createdAt)} ${fmtTime(r.createdAt)}`),
+                    h('div', { class: 'stored__body' }, r.body),
+                    h('p', { class: 'hint', style: 'margin-top:12px' }, 'Composed locally from the workbook figures in this demo. No model wrote it and nothing was mailed.')),
+                  actions: [{ label: 'Close', class: 'btn--primary' }],
+                }),
+              }, 'Read'))))
+            : h('p', { class: 'muted small' }, 'Nothing stored yet. Open the Report Writer in the Playground and ask it to generate and store this week\'s report — it lands here with a run in the history.')),
 
         h('div', { class: 'card' },
           h('div', { class: 'card__head' }, h('h3', {}, 'How the answers are made')),

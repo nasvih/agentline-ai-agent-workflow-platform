@@ -5,8 +5,10 @@
 import { h, qs, esc, icon, createStore, router, toast, confirmDialog, modal } from '../lib/ui.js';
 import { initPWA } from '../lib/pwa.js';
 import { STORE_KEY, seedState } from './data.js';
-import { buildConsoleBot } from './agent.js';
+import { buildConsoleBot, ACTION_PROBES, SCOPE_LABEL } from './agent.js';
 import { selfTest } from './selftest.js';
+import { initTopbar } from './topbar.js';
+import { onAppRefresh } from './runner.js';
 
 import * as viewAgents from './views/agents.js';
 import * as viewPlayground from './views/playground.js';
@@ -52,8 +54,15 @@ let current = 'agents';
    kept one click away in the sidebar footer and remembered per browser. */
 const UI_KEY = 'agentline.ui.v1';
 const readUI = () => { try { return JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (_) { return {}; } };
-const ui = { rail: false, amber: true, ...readUI() };
+/* rail + sidebar colour, plus the theme and the notifications that have
+   been read. All of it is per browser and survives a reload. */
+const ui = { rail: false, amber: true, theme: null, readNotes: [], ...readUI() };
 const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (_) {} };
+
+/* The framed copy of the app inside the phone preview: same code, one
+   flag, so it does not offer the frame again from inside the frame. */
+const FRAMED = new URLSearchParams(location.search).get('frame') === '1';
+if (FRAMED) document.body.classList.add('is-framed');
 
 /* where this application's source is published */
 const REPO_URL = 'https://github.com/nasvih/agentline-ai-agent-workflow-platform';
@@ -160,7 +169,8 @@ function paintFoot() {
     html: `${glyph}<span>${esc(label)}</span>`,
   });
 
-  foot.appendChild(footBtn('About this demo', icon('alert'), showAbout));
+  /* "About this demo" is not here any more — it is the button in the
+     topbar, where a first-time reader looks for it. */
 
   /* nasvih.in is the only dark element in the sidebar, so it reads as a link
      out of the product whichever tone the navigation is set to. The repository
@@ -168,7 +178,7 @@ function paintFoot() {
      the footer is the point of the inverted element. */
   foot.appendChild(h('div', { class: 'side__pair' },
     footLink('nasvih.in', ICON_OUT, 'https://www.nasvih.in', 'side__site'),
-    footLink('Source on GitHub', ICON_CODE, REPO_URL)));
+    footLink('GitHub', ICON_CODE, REPO_URL)));
 
   /* built outside this function so the install control survives the repaint */
   installRow.replaceChildren(footBtn('Reset demo data', icon('refresh'), resetDemo));
@@ -186,6 +196,10 @@ async function resetDemo() {
   );
   if (!ok) return;
   store.reset();
+  /* the seed is deterministic, so the rebuilt runs carry the same ids —
+     without this, everything you had already read stays read */
+  ui.readNotes = [];
+  saveUI();
   toast('Demo data reset', 'ok');
   render(current, [], new URLSearchParams());
 }
@@ -218,6 +232,16 @@ function showAbout() {
         <p><strong>You can actually use it.</strong> Build workflows, add and remove steps, run them, toggle tools and guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.</p>
         <p><strong>Your data stays on your machine.</strong> Everything you enter is saved in this browser's local storage. There is no account and no backend. Clear your browser data, or use <strong>Reset demo data</strong>, and it is all gone.</p>
         <p><strong>The agents are simulated.</strong> Every reply, tool call, token count and latency figure is generated locally from this app's demo data. No model is connected and no request leaves your browser.</p>
+      </section>
+      <section class="aboutblock">
+        <h4>The agents do things, not only answer</h4>
+        <p>Ask in plain language. The agent shows what it understood and what it would touch, and applies it only when you press the button — then reports what changed, before and after. These are the exact phrases that work, and what each one does:</p>
+        <div class="tablewrap tablewrap--scroll" style="margin-top:10px">
+          <table class="data data--grid actiontable"><thead><tr><th>Say this</th><th>Where</th><th>And it will</th></tr></thead><tbody>
+          ${ACTION_PROBES.map((p) => `<tr><td>${esc(p.q)}</td><td class="small muted">${esc(SCOPE_LABEL[p.scope] || p.scope)}</td><td class="small muted">${esc(p.does)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>
+        <p style="margin-top:10px">Every one of those writes a real record into this browser and a real trace you can open in <strong>Runs</strong>. The trace, the token counts and the latency figures are simulated locally — there is no model behind any of it.</p>
       </section>
       <section class="aboutblock">
         <h4>The source</h4>
@@ -257,7 +281,31 @@ qs('#menubtn').innerHTML = icon('menu');
 qs('#menubtn').addEventListener('click', () => setSide(!sideEl.classList.contains('is-open')));
 scrimEl.addEventListener('click', () => setSide(false));
 qs('#resetbtn').addEventListener('click', resetDemo);
-qs('#demopill').addEventListener('click', showAbout);
+qs('#aboutbtn').addEventListener('click', showAbout);
+
+/* ---------- topbar: notifications, device preview, dark mode ----------
+   Phone mode replaces the desktop app with an iframe of the same app at
+   390px. The outer copy is emptied first, so the Playground chat is
+   never mounted twice at once. */
+let phoneMode = false;
+const topbar = initTopbar({
+  mount: qs('#topbartools'),
+  store,
+  prefs: ui,
+  savePrefs: saveUI,
+  framed: FRAMED,
+  navigate: (p) => { location.hash = `#/${p}`; },
+  onPhoneMode: (on) => {
+    phoneMode = on;
+    shellEl.hidden = on;
+    if (on) {
+      viewEl.innerHTML = '';
+      if (consoleBot && consoleBot.open) consoleBot.toggle(false);
+    } else {
+      render(current, [], new URLSearchParams());
+    }
+  },
+});
 
 /* ---------- rendering ---------- */
 const ctxBase = {
@@ -268,6 +316,7 @@ const ctxBase = {
 
 function render(route, params, query) {
   current = route;
+  if (phoneMode) return;              // the frame owns the screen
   const item = byId(route);
   qs('#crumb').textContent = item.label;
   qs('#crumbsub').textContent = item.sub || 'workspace';
@@ -298,11 +347,23 @@ function render(route, params, query) {
       h('p', {}, String(err && err.message ? err.message : err)));
   }
   viewEl.appendChild(node);
+  if (topbar) topbar.refresh();
   if (route !== lastRoute) { window.scrollTo(0, 0); lastRoute = route; }
 }
 let lastRoute = null;
 
 const nav = router(routes, render);
+
+/* ---------- when an agent changes something ----------
+   Actions mutate the store and then ask the app to catch up. The one
+   screen that must not be redrawn is the Playground: redrawing it would
+   throw away the conversation the action button was pressed in. */
+onAppRefresh(() => {
+  if (topbar) topbar.refresh();
+  if (phoneMode) return;
+  if (current === 'playground') { paintNav(); return; }
+  nav.go();                            // re-reads the hash, so params survive
+});
 
 /* ---------- console agent ---------- */
 const consoleBot = buildConsoleBot(store);

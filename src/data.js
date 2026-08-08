@@ -364,6 +364,9 @@ export function seedState() {
     invoices: seedInvoices(rnd),
     accounts: seedAccounts(rnd),
     metrics: seedMetrics(rnd),
+    /* written by the Report Writer when it is told to store a summary;
+       listed on the Settings screen */
+    reports: [],
     counters: { runSeq: 1, agentSeq: 1, escalationSeq: 4180 },
   };
 }

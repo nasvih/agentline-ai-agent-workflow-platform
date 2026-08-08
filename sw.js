@@ -3,7 +3,7 @@
    network), and a single versioned cache so an update wipes the old one.
    Bump CACHE_VERSION whenever the file list or any cached asset changes. */
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE = `${self.registration.scope}::${CACHE_VERSION}`;
 
 /* Agentline's own shell files — everything the app needs to boot with no
@@ -21,6 +21,9 @@ const SHELL = [
   './src/main.js',
   './src/data.js',
   './src/agent.js',
+  './src/actions.js',
+  './src/runner.js',
+  './src/topbar.js',
   './src/selftest.js',
   './src/views/agents.js',
   './src/views/playground.js',

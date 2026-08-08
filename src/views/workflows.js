@@ -3,52 +3,19 @@
    that writes a real run into the Runs screen. */
 
 import { h, icon, num, ago, toast, modal, confirmDialog } from '../../lib/ui.js';
-import { workflowById, toolById, agentById, newRunId, estimateCost, rupees } from '../data.js';
+import { workflowById, toolById, agentById, rupees } from '../data.js';
+import { executeWorkflow, consumeWorkflowRun } from '../runner.js';
 
 const KIND_LABEL = { tool: 'Tool call', agent: 'Agent', condition: 'Condition', output: 'Output' };
 const KIND_ICON = { tool: 'grid', agent: 'spark', condition: 'filter', output: 'download' };
 
-/* ---------- planning a run ---------- */
-function planRun(state, wf) {
-  const steps = [];
-  for (const st of wf.steps) {
-    if (!st.enabled) {
-      steps.push({ ...st, result: 'skipped', reason: 'step disabled' });
-      continue;
-    }
-    if (st.kind === 'tool') {
-      const tool = toolById(state, st.ref);
-      if (tool && !tool.connected) {
-        steps.push({ ...st, result: 'failed', reason: `${tool.name} is disconnected` });
-        continue;
-      }
-      steps.push({ ...st, result: 'ok', reason: `${tool ? tool.name : st.ref} responded` });
-      continue;
-    }
-    if (st.kind === 'agent') {
-      const a = agentById(state, st.ref);
-      if (a && a.status !== 'live') {
-        steps.push({ ...st, result: 'skipped', reason: `${a.name} is ${a.status}` });
-        continue;
-      }
-      steps.push({ ...st, result: 'ok', reason: `${a ? a.name : st.ref} finished` });
-      continue;
-    }
-    steps.push({ ...st, result: 'ok', reason: st.detail || 'evaluated true' });
-  }
-  const failed = steps.some((s) => s.result === 'failed');
-  const skipped = steps.some((s) => s.result === 'skipped');
-  return { steps, status: failed ? 'failed' : skipped ? 'blocked' : 'success' };
-}
-
-/* ---------- the run log ---------- */
-function runWorkflow(ctx, wf, logHost, headerHost) {
-  const state = ctx.state;
-  const plan = planRun(state, wf);
-  const agentStep = wf.steps.find((s) => s.kind === 'agent');
-  const agent = agentStep ? agentById(state, agentStep.ref) : null;
-  const runId = newRunId();
-
+/* ---------- the run log ----------
+   The engine lives in src/runner.js so that the button here and an agent
+   told to "run the invoice workflow" execute exactly the same thing.
+   `starter` is passed when the agent asked for the run: it is the
+   engine already bound to that request, so the agent's promise resolves
+   with the same result the log shows. */
+function runWorkflow(ctx, wf, logHost, headerHost, starter) {
   logHost.innerHTML = '';
   logHost.hidden = false;
   headerHost.textContent = 'running';
@@ -59,62 +26,25 @@ function runWorkflow(ctx, wf, logHost, headerHost) {
     h('span', { class: 'runlog__msg' }, msg),
     h('span', { class: `runlog__st runlog__st--${status}` }, status));
 
-  let clock = 0;
-  const trace = [{ label: 'Trigger fired', kind: 'system', status: 'ok', ms: 12, detail: wf.trigger.label }];
-  logHost.appendChild(line('0.00s', `trigger — ${wf.trigger.label}`, 'ok'));
-
-  let i = 0;
-  const tick = () => {
-    if (i >= plan.steps.length) return done();
-    const st = plan.steps[i++];
-    const ms = st.result === 'skipped' ? 0 : Math.round(st.avgMs * (0.6 + Math.random() * 0.9));
-    clock += ms;
-    logHost.appendChild(line(`${(clock / 1000).toFixed(2)}s`, `${st.name} — ${st.reason}`, st.result === 'ok' ? 'ok' : st.result));
+  const onLine = (t, msg, status) => {
+    logHost.appendChild(line(t, msg, status));
     logHost.scrollTop = logHost.scrollHeight;
-    trace.push({ label: st.name, kind: st.kind, status: st.result === 'ok' ? 'ok' : st.result, ms, detail: st.reason });
-    setTimeout(tick, 260 + Math.random() * 320);
   };
 
-  function done() {
-    const tokensIn = agent ? Math.round(agent.avgTokens.in * (0.8 + Math.random() * 0.5)) : 640;
-    const tokensOut = agent ? Math.round(agent.avgTokens.out * (0.8 + Math.random() * 0.5)) : 180;
-    const costPaise = estimateCost(tokensIn, tokensOut);
-    clock += 40;
-    trace.push({ label: 'Outputs written', kind: 'output', status: plan.status === 'success' ? 'ok' : plan.status, ms: 40, detail: wf.outputs.join(' · ') });
-    logHost.appendChild(line(`${(clock / 1000).toFixed(2)}s`, `outputs — ${wf.outputs.join(', ')}`, plan.status === 'success' ? 'ok' : plan.status));
-    logHost.appendChild(line(`${(clock / 1000).toFixed(2)}s`, `run ${runId} finished ${plan.status} · ${num(tokensIn + tokensOut)} tokens · ${rupees(costPaise)}`, plan.status === 'success' ? 'ok' : plan.status));
-    logHost.scrollTop = logHost.scrollHeight;
+  const started = starter ? starter({ onLine }) : executeWorkflow(ctx.store, wf, { onLine });
 
-    headerHost.textContent = plan.status;
-    headerHost.className = `pill ${plan.status === 'success' ? 'pill--ok' : plan.status === 'failed' ? 'pill--bad' : 'pill--info'}`;
-
-    ctx.store.update((s) => {
-      const w = s.workflows.find((x) => x.id === wf.id);
-      if (w) w.lastRunAt = new Date().toISOString();
-      s.runs.unshift({
-        id: runId,
-        agentId: agent ? agent.id : (s.agents[0] || {}).id,
-        workflowId: wf.id,
-        trigger: 'Workflow',
-        status: plan.status,
-        startedAt: new Date().toISOString(),
-        durationMs: clock,
-        tokensIn, tokensOut, costPaise,
-        guardrails: (agent ? agent.guardrails : []).map((g) => ({ id: g, verdict: 'passed' })),
-        trace,
-      });
-      s.runs = s.runs.slice(0, 90);
-    });
-
-    toast(`Run ${plan.status} — open it in Runs`, plan.status === 'success' ? 'ok' : 'bad');
+  return started.then((r) => {
+    headerHost.textContent = r.status;
+    headerHost.className = `pill ${r.status === 'success' ? 'pill--ok' : r.status === 'failed' ? 'pill--bad' : 'pill--info'}`;
+    onLine('', `${num(r.tokensIn + r.tokensOut)} tokens · ${rupees(r.costPaise)} at the demo rate`, r.status === 'success' ? 'ok' : r.status);
+    toast(`Run ${r.status} — open it in Runs`, r.status === 'success' ? 'ok' : 'bad');
     logHost.appendChild(h('div', { class: 'runlog__line' },
       h('span', { class: 'runlog__t' }, ''),
       h('span', { class: 'runlog__msg' },
-        h('button', { class: 'btn btn--sm', onclick: () => ctx.navigate(`runs/${runId}`) }, 'Open the trace')),
+        h('button', { class: 'btn btn--sm', onclick: () => ctx.navigate(`runs/${r.runId}`) }, 'Open the trace')),
       h('span', { class: 'runlog__st' }, '')));
-  }
-
-  setTimeout(tick, 320);
+    return r;
+  });
 }
 
 /* ---------- add step ---------- */
@@ -273,6 +203,14 @@ export function render(ctx) {
     h('div', { class: 'node__main' },
       h('div', { class: 'node__name' }, 'Outputs'),
       h('div', { class: 'node__detail' }, wf.outputs.join(' · ')))));
+
+  /* An agent may have asked for this workflow to be run. The request is
+     picked up once the node is in the tree, so the log streams here
+     instead of the run happening out of sight. */
+  queueMicrotask(() => {
+    const starter = consumeWorkflowRun(wf.id);
+    if (starter) runWorkflow(ctx, wf, logHost, statusPill, starter);
+  });
 
   return h('div', {},
     h('div', { class: 'page-head' },

@@ -164,6 +164,12 @@
 .topicchip button:hover{color:var(--bad)}
 .topicchip svg{width:12px;height:12px}
 
+/* == 7b. stored reports (Settings) == */
+.stored{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--surface-2)}
+.stored__title{font-weight:600;font-size:13.5px}
+.stored__body{white-space:pre-wrap;font-size:13.5px;line-height:1.6;color:var(--ink-2);
+  border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);padding:12px 14px;max-height:46vh;overflow-y:auto}
+
 /* == 8. responsive == */
 @media (max-width:1180px){ .pg{grid-template-columns:minmax(0,1fr)} .rail{position:static} .pg__chat{height:520px} }
 @media (max-width:900px){
@@ -207,6 +213,11 @@
 /* the repository line: amber text on white has to be --amber-deep, never the fill */
 .aboutsrc{font-family:var(--mono);font-size:12.5px;color:var(--amber-deep);text-decoration:none;border-bottom:1px solid var(--amber-line);word-break:break-all}
 .aboutsrc:hover{border-bottom-color:var(--amber-deep)}
+/* the action list in the About modal: three columns of prose do not fit
+   at phone width, so it scrolls sideways inside its wrapper instead of
+   squashing into one word per line */
+.actiontable{min-width:520px}
+.actiontable td:first-child{font-weight:600}
 .simnote{font-size:12px;color:var(--muted);background:var(--amber-soft);border:1px solid var(--amber-line);
   border-radius:var(--r-sm);padding:8px 11px;line-height:1.5}
 .rail .simnote{border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--amber-soft)}
@@ -237,6 +248,114 @@ body.is-playground .assist-fab{display:none}
 .side__site:hover{background:var(--night-2);border-color:var(--night-2);color:#fff}
 .side[data-tone="amber"] .side__site{background:var(--night);border-color:var(--night);color:#fff}
 .side[data-tone="amber"] .side__site:hover{background:var(--night-2);border-color:var(--night-2)}
+
+/* == 13. topbar controls ==
+   Three icon-only controls sit between the page title and the About
+   button: notifications, device preview, dark mode. They keep the 34px
+   button box of the kit so the row stays on one baseline. */
+.topbar__crumb{min-width:0}
+.topbar__tools{display:flex;align-items:center;gap:4px;flex:none}
+.topbar__tools .btn--icon{width:34px;height:34px}
+.devgroup{display:flex;gap:2px;border:1px solid var(--line);border-radius:var(--r);padding:2px}
+.devgroup .btn{width:30px;height:30px;padding:0}
+.devgroup .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
+
+/* notifications */
+.notifwrap{position:relative;display:flex}
+.notif__badge{position:absolute;top:-1px;right:-1px;min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);
+  background:var(--bad);color:#fff;border:1px solid var(--surface);
+  font-family:var(--mono);font-size:9.5px;font-weight:600;line-height:14px;text-align:center;letter-spacing:0}
+.notifpanel{position:absolute;top:calc(100% + 8px);right:0;width:min(380px,calc(100vw - 32px));z-index:70;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-3);overflow:hidden}
+.notifpanel__head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.notifpanel__head h3{font-size:14px;flex:1}
+.notifpanel__body{max-height:min(58vh,460px);overflow-y:auto}
+.notifpanel__foot{padding:8px 12px;border-top:1px solid var(--line);background:var(--surface-2);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.note{display:flex;align-items:flex-start;gap:6px;border-bottom:1px solid var(--line);padding:2px 6px 2px 0}
+.note:last-child{border-bottom:0}
+.note__main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;text-align:left;
+  background:none;border:0;cursor:pointer;padding:10px 8px 10px 12px;color:inherit}
+.note__main:hover{background:var(--hover)}
+.note__top{display:flex;align-items:center;gap:8px}
+.note__when{font-size:10.5px;color:var(--faint);margin-left:auto}
+.note__title{font-size:13px;font-weight:600;line-height:1.35}
+.note__detail{font-size:12px;color:var(--muted);line-height:1.4}
+.note__mark{width:28px;height:28px;padding:6px;flex:none;margin-top:10px}
+.note__read{flex:none;margin-top:14px;padding-right:4px}
+.note.is-read .note__title{font-weight:500;color:var(--muted)}
+.notifempty{padding:26px 18px;text-align:center}
+.notifempty h4{margin-bottom:6px}
+.notifempty p{font-size:12.5px;color:var(--muted)}
+.notifempty p+p{margin-top:8px}
+
+/* == 14. device preview ==
+   A yellow surround, a dark bezel and an iframe of this same app at
+   390x844 — real breakpoints, not a scaled screenshot. */
+.devframe{position:fixed;inset:0;z-index:90;background:var(--amber-fill);color:var(--on-amber);
+  display:flex;flex-direction:column;align-items:center;padding:14px;overflow:auto;
+  /* the surround is yellow in both themes, so the ink on it stays ink */
+  --ink:#17181A;--ink-2:#2E3033;--muted:#4A4E54;--faint:#4A4E54;--line:rgba(23,24,26,.2)}
+.devframe__bar{width:min(720px,100%);display:flex;align-items:center;gap:12px;justify-content:space-between;
+  padding-bottom:12px;border-bottom:1px solid rgba(23,24,26,.2);flex:none}
+.devframe__name{font-weight:700;font-size:17px;letter-spacing:-.02em}
+.devframe__sub{color:var(--ink-2)}
+.devframe__stage{flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center;padding:14px 0}
+.devframe__slot{position:relative;flex:none}
+.devframe__phone{position:absolute;top:0;left:0;width:414px;height:892px;background:#17181A;border-radius:46px;
+  padding:24px 12px;transform-origin:top left;box-shadow:var(--shadow-3)}
+.devframe__view{width:390px;height:844px;border:0;border-radius:26px;background:#fff;display:block}
+.devframe__note{width:min(720px,100%);font-size:12.5px;color:var(--ink-2);flex:none;padding-bottom:4px}
+body.is-phoneframe .assist-fab{display:none}
+/* inside the frame the app must not offer the frame again */
+body.is-framed .devgroup{display:none}
+
+/* == 15. topbar at small widths ==
+   Four controls, a title and two buttons do not fit at 390px. The
+   sub-label goes first, then the topbar reset (the sidebar footer keeps
+   one), then the device button that is already active. */
+@media (max-width:900px){
+  .topbar{gap:8px}
+  .topbar__sub{display:none}
+  .topbar__title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media (max-width:760px){ #resetbtn{display:none} }
+@media (max-width:640px){
+  .devgroup .btn[aria-pressed="true"]{display:none}
+  .devgroup{border:0;padding:0}
+  .notifpanel{position:fixed;top:calc(var(--bar) + 8px);left:12px;right:12px;width:auto}
+  .devframe__bar{flex-wrap:wrap}
+}
+
+/* == 16. dark mode ==
+   The kit ships the palette; these are the app-level places where a
+   token alone is not enough. Yellow always keeps ink text on it. */
+[data-theme="dark"]{color-scheme:dark}
+/* the yellow sidebar is a light surface whatever the theme, so inside it
+   the ink tokens go back to their light values rather than inverting */
+[data-theme="dark"] .side[data-tone="amber"]{
+  --ink:#17181A;--ink-2:#2E3033;--muted:#4A4E54;--faint:#4A4E54;
+  --bg:#FFFFFF;--surface:#FFFFFF;--hover:#FEFBEA;
+  --amber-deep:#8A6D00;--amber-darker:#6B5400;--amber-soft:#FEF9DA;--amber-line:#F0DE8C;
+}
+[data-theme="dark"] .side[data-tone="amber"] .side__site{background:#17181A;border-color:#17181A;color:#fff}
+[data-theme="dark"] .side[data-tone="amber"] .side__site:hover{background:#2E3033;border-color:#2E3033}
+/* the kit's select arrow is drawn in the light muted grey */
+[data-theme="dark"] .select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23A2A8B0' stroke-width='1.7'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E")}
+/* the switch knob is white on both tracks; on a dark ground the off
+   track needs to stay visibly lighter than the surface it sits on */
+[data-theme="dark"] .switch__track{background:#4A4E54}
+[data-theme="dark"] .switch__track::after{background:#F2F2F0}
+[data-theme="dark"] .switch input:checked+.switch__track::after{background:#17181A}
+/* run log and code blocks sit on --night, which is darker than the page
+   in dark mode — a hairline keeps them from melting into it */
+[data-theme="dark"] .runlog,[data-theme="dark"] .code{border-color:var(--line-2)}
+[data-theme="dark"] .notif__badge{border-color:var(--surface)}
+[data-theme="dark"] .seg__av{background:#3A3D42;color:#F2F2F0}
+[data-theme="dark"] .msg--me .msg__av{background:#3A3D42;color:#F2F2F0}
+[data-theme="dark"] .msg--me .msg__body{background:#0F1012;border-color:var(--line-2);color:var(--ink)}
+[data-theme="dark"] .toast{border:1px solid var(--line-2)}
+[data-theme="dark"] .tile--muted{background:var(--surface-2)}
 
 /* Under 900px the sidebar is a drawer, so the rail must not claim a grid
    column or strip the labels the drawer needs. Overrides the shared rules. */

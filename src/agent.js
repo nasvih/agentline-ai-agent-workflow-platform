@@ -10,6 +10,11 @@
    Pipeline for one turn:
      topic check -> escalation check -> tool availability ->
      intent answer -> PII redaction -> cost ceiling -> telemetry + run
+
+   Some intents do not only answer: they offer to change the workspace.
+   Those live in `actions.js` and are merged in at the front of every
+   pack, so an instruction ("run the invoice workflow") beats the
+   question that shares its words ("what workflows are there").
    ============================================================ */
 
 import { Assistant } from '../lib/assistant.js';
@@ -18,6 +23,7 @@ import {
   guardActive, toolById, guardById, agentById,
   estimateCost, rupees, newRunId, ONBOARD_STEPS,
 } from './data.js';
+import { agentActions, consoleActions, catalogueFor, ACTION_CATALOGUE } from './actions.js';
 
 /* ---------- small helpers ---------- */
 const T = (head, rows) => ({ head, rows });
@@ -65,7 +71,7 @@ function estimateTurn(agent, question, answerText, toolCalls) {
 /* ============================================================
    Guardrail wrapper
    ============================================================ */
-function wrapIntent(intent, agent, store, emit) {
+function wrapIntent(intent, agent, store, emit, session) {
   const baseAnswer = intent.answer;
   const answer = (q, ctx) => {
       const s = store.state;
@@ -74,6 +80,10 @@ function wrapIntent(intent, agent, store, emit) {
       const ev = (label, kind, status, ms, detail) => { events.push({ label, kind, status, ms, detail }); };
       const jitter = (a, b) => a + Math.round(Math.random() * (b - a));
 
+      /* Remember the last *question*, so "turn the rule off and ask that
+         again" has something to re-ask. Instructions are not questions. */
+      if (session && !intent.operator) session.lastQ = q;
+
       ev('Request accepted', 'system', 'ok', jitter(3, 12), `model ${agent.model} · streaming ${s.settings.streaming ? 'on' : 'off'}`);
 
       const needTools = intent.tools || [];
@@ -81,9 +91,18 @@ function wrapIntent(intent, agent, store, emit) {
       let status = 'success';
       let toolCalls = 0;
 
+      /* An operator instruction — "disconnect the CRM", "escalate this
+         ticket" — is not customer text, so the topic and escalation
+         checks that read customer wording are recorded as skipped rather
+         than applied. Redaction and the cost ceiling still run. */
+      const operator = !!intent.operator;
+      if (operator) {
+        ev('Guardrail: topic and escalation checks', 'guardrail', 'skipped', jitter(2, 7), 'operator instruction, not customer text');
+      }
+
       /* 1 — allowed topics */
       const gTopics = guardById(s, 'topics');
-      if (guardActive(s, agent, 'topics')) {
+      if (!operator && guardActive(s, agent, 'topics')) {
         const hit = (gTopics.blocked || []).find((w) => q.toLowerCase().includes(w));
         if (hit) {
           ev('Guardrail: allowed topics', 'guardrail', 'blocked', jitter(2, 8), `term "${hit}" is outside the topic list`);
@@ -96,14 +115,14 @@ function wrapIntent(intent, agent, store, emit) {
           ev('Guardrail: allowed topics', 'guardrail', 'ok', jitter(2, 8), 'question is on-topic');
           verdicts.push({ id: 'topics', verdict: 'passed', detail: 'on-topic' });
         }
-      } else if (agent.guardrails.includes('topics')) {
+      } else if (!operator && agent.guardrails.includes('topics')) {
         verdicts.push({ id: 'topics', verdict: 'off', detail: 'rule disabled' });
       }
 
       /* 2 — escalation to a human */
       const gEsc = guardById(s, 'escalate');
       let escalatedNote = '';
-      if (!out && agent.guardrails.includes('escalate')) {
+      if (!operator && !out && agent.guardrails.includes('escalate')) {
         const trigger = (gEsc.triggers || []).find((w) => q.toLowerCase().includes(w));
         if (trigger && guardActive(s, agent, 'escalate')) {
           const ref = `ESC-${s.counters.escalationSeq + 1}`;
@@ -207,6 +226,11 @@ function wrapIntent(intent, agent, store, emit) {
       };
       if (emit) emit(tel);
 
+      /* A turn that was refused, handed over or truncated does not get to
+         offer buttons — the answer the reader sees is the guardrail's,
+         not the intent's. */
+      if (status !== 'success' && out.actions) out = { ...out, actions: null };
+
       const meta = `${intent.trace || 'read the workspace records'} · ${num(est.tokensIn)} in / ${num(est.tokensOut)} out · ${rupees(est.costPaise)}`;
       return {
         ...out,
@@ -239,11 +263,16 @@ function wrapIntent(intent, agent, store, emit) {
 function sharedIntents(agent) {
   return [
     {
-      id: 'self', match: [/what (can|do) you do|who are you|capabilit|your job|introduce/i, 'about you'],
-      trace: 'read the agent definition',
-      answer: (q, { state }) => ({
-        text: `I am **${agent.name}**, running on \`${agent.model}\`.\n\n${agent.description}\n\n- Tools: ${agent.tools.map((t) => (toolById(state, t) || {}).name).join(', ') || 'none wired yet'}\n- Guardrails: ${agent.guardrails.map((g) => (guardById(state, g) || {}).name).join(', ') || 'none bound yet'}\n- Owner: ${agent.owner} · created ${fmtDate(agent.createdAt)}`,
-      }),
+      id: 'self', match: [/what (can|do) you do|who are you|capabilit|your job|introduce|what are you able/i, 'about you'],
+      trace: 'read the agent definition and my own action list',
+      answer: (q, { state }) => {
+        const rows = catalogueFor(agent.id);
+        return {
+          text: `I am **${agent.name}**, running on \`${agent.model}\`.\n\n${agent.description}\n\n- Tools: ${agent.tools.map((t) => (toolById(state, t) || {}).name).join(', ') || 'none wired yet'}\n- Guardrails: ${agent.guardrails.map((g) => (guardById(state, g) || {}).name).join(', ') || 'none bound yet'}\n- Owner: ${agent.owner} · created ${fmtDate(agent.createdAt)}\n\n**I can also change things, not only report them.** Each of these gives you a button first and applies nothing until you press it:`,
+          table: T(['Say this', 'And I will'], rows.map((r) => [r.ask, r.does])),
+          suggestions: rows.slice(0, 3).map((r) => r.ask).concat(suggestionsFor(agent)[0]),
+        };
+      },
     },
     {
       id: 'stats', match: [/success rate|how are you doing|your (stats|numbers|performance)|how many runs|reliab/i],
@@ -294,8 +323,11 @@ function sharedIntents(agent) {
           const t = sortDesc(state.tickets.filter((x) => x.status === 'open'), (x) => x.ageH)[0] || state.tickets[0];
           who = t.contact; where = t.customer; email = t.email; phone = t.phone; note = `${t.id}, ${t.ageH}h old`;
         }
+        const masking = guardActive(state, agent, 'pii');
         return {
-          text: `**${who}** at ${where} — ${email}${phone ? ` · ${phone}` : ''}\n\nSource record: ${note}.\n\nWith **PII redaction** on for this agent those values come back masked. Switch the rule off in Guardrails and ask again to see them in full.`,
+          text: `**${who}** at ${where} — ${email}${phone ? ` · ${phone}` : ''}\n\nSource record: ${note}.\n\n${masking
+            ? 'With **PII redaction** on for this agent those values come back masked. Switch the rule off in Guardrails, or tell me to turn it off, and ask again to see them in full.'
+            : '**PII redaction** is off, so those values are in full. Tell me to turn it back on and ask again to watch them get masked.'}`,
         };
       },
     },
@@ -329,9 +361,10 @@ function triagePack() {
         const t = state.tickets;
         const open = t.filter((x) => x.status === 'open');
         const waiting = t.filter((x) => x.status === 'waiting');
+        const escalated = t.filter((x) => x.status === 'escalated');
         const oldest = sortDesc(open, (x) => x.ageH).slice(0, 5);
         return {
-          text: `**${open.length} open**, ${waiting.length} waiting on the customer, ${t.length - open.length - waiting.length} resolved. Oldest five below, sorted by age.`,
+          text: `**${open.length} open**, ${waiting.length} waiting on the customer, ${escalated.length} escalated to a person, ${t.length - open.length - waiting.length - escalated.length} resolved. Oldest five below, sorted by age.`,
           table: T(['Ticket', 'Customer', 'Priority', 'Age'], oldest.map((x) => [x.id, x.customer, x.priority, `${x.ageH}h`])),
         };
       },
@@ -573,7 +606,7 @@ function onboardPack() {
       answer: (q, { state }) => {
         const stuck = state.accounts.filter((a) => a.stuckDays >= 5);
         return {
-          text: `**${stuck.length}** accounts have been on the same step for five days or more. The common stall is *Catalogue imported* — the CSV usually fails on the price column.`,
+          text: `**${stuck.length}** accounts have been on the same step for five days or more. The common stall is **Catalogue imported** — the CSV usually fails on the price column.`,
           table: T(['Account', 'Step', 'Days', 'Owner'], sortDesc(stuck, (x) => x.stuckDays).slice(0, 6).map((a) => [a.name, a.step, String(a.stuckDays), a.owner])),
         };
       },
@@ -628,7 +661,7 @@ function onboardPack() {
         const done = state.accounts.filter((a) => a.stepIdx >= 4);
         const avgStuck = Math.round(sum(state.accounts, (a) => a.stuckDays) / state.accounts.length);
         return {
-          text: `**${done.length} of ${state.accounts.length}** accounts have reached the first order, which is the point we treat as first value. Average time sitting on the current step across the whole book is ${avgStuck} days.\n\nThe two steps that cost the most days are *Catalogue imported* and *Payment set up*.`,
+          text: `**${done.length} of ${state.accounts.length}** accounts have reached the first order, which is the point we treat as first value. Average time sitting on the current step across the whole book is ${avgStuck} days.\n\nThe two steps that cost the most days are **Catalogue imported** and **Payment set up**.`,
           table: T(['Plan', 'Accounts', 'At first order'], ['Starter', 'Growth', 'Scale'].map((p) => {
             const set = state.accounts.filter((a) => a.plan === p);
             return [p, String(set.length), String(set.filter((a) => a.stepIdx >= 4).length)];
@@ -792,19 +825,40 @@ const PACK_BUILDERS = {
   report: reportPack,
 };
 
+/* Four chips per agent, because the panel shows four. One of them is
+   always an instruction rather than a question, so the first thing a
+   reader tries can be something the agent actually does. */
 export const AGENT_SUGGESTIONS = {
-  triage: ['How big is the queue?', 'Draft a reply for the oldest ticket', 'Who should take the next one?', 'What are people complaining about?'],
-  invoice: ['What needs review?', 'Total payable this month', 'Any duplicates?', 'Extract INV-8820'],
-  onboard: ['Which accounts are stuck?', 'Show the setup checklist', 'How do I import the catalogue?', 'Book a call'],
-  report: ['Write the weekly summary', 'Compare against last week', 'What moved this week?', 'Where does the data come from?'],
+  triage: ['How big is the queue?', 'Escalate the oldest ticket', 'Draft a reply for the oldest ticket', 'What can you do?'],
+  invoice: ['What needs review?', 'Post the next clean invoice for approval', 'Total payable this month', 'What can you do?'],
+  onboard: ['Which accounts are stuck?', 'Advance the most stuck account', 'Show the setup checklist', 'What can you do?'],
+  report: ['Write the weekly summary', 'Generate and store this week\'s report', 'Compare against last week', 'What can you do?'],
 };
 
 export const CONSOLE_SUGGESTIONS = [
   'How is the workspace doing?',
-  'What failed?',
-  'Where is the cost going?',
-  'Which connections are down?',
+  'Run the invoice intake workflow',
+  'Re-run the last failed run',
+  'What can you do?',
 ];
+
+/* Every phrase that must reach an action intent, with the intent it has
+   to land on. The self-test walks this list; the About modal prints it. */
+export const ACTION_PROBES = [
+  ...ACTION_CATALOGUE.console.map((r) => ({ scope: 'console', q: r.ask, expect: r.id, does: r.does })),
+  ...['triage', 'invoice', 'onboard', 'report'].flatMap((id) =>
+    (ACTION_CATALOGUE[id] || []).map((r) => ({ scope: id, q: r.ask, expect: r.id, does: r.does }))),
+  ...ACTION_CATALOGUE.shared.map((r) => ({ scope: 'shared', q: r.ask, expect: r.id, does: r.does })),
+];
+
+export const SCOPE_LABEL = {
+  console: 'Agentline Console',
+  shared: 'Every agent',
+  triage: 'Support Triage',
+  invoice: 'Invoice Reader',
+  onboard: 'Onboarding Assistant',
+  report: 'Report Writer',
+};
 
 export const GUARDRAIL_PROBES = [
   { label: 'Off-topic question', q: 'what are the salary bands here?' },
@@ -863,9 +917,15 @@ function handoverIntent(store) {
   };
 }
 
-export function packFor(agent, store) {
+export function packFor(agent, store, session) {
   const build = PACK_BUILDERS[agent.id] || genericPack;
-  const pack = [...build(), ...sharedIntents(agent)];
+  /* Actions first: an instruction must outscore the question that shares
+     its vocabulary, and `_route` keeps the earliest intent on a tie. */
+  const pack = [
+    ...(store ? agentActions(store, agent, session) : []),
+    ...build(),
+    ...sharedIntents(agent),
+  ];
   /* Catchers go last so a real intent always outscores them. They exist so
      that no suggestion chip or guardrail probe can ever reach the fallback. */
   if (store) pack.push(offTopicIntent(store), handoverIntent(store));
@@ -882,13 +942,16 @@ export const DEFAULT_AGENT_SUGGESTIONS = [
 export const suggestionsFor = (agent) => AGENT_SUGGESTIONS[agent.id] || DEFAULT_AGENT_SUGGESTIONS;
 
 export function buildAgentBot(store, agent, { emit } = {}) {
-  const intents = packFor(agent, store).map((i) => wrapIntent(i, agent, store, emit));
+  /* The session is how an action reaches back into the conversation it
+     was offered in: `bot` to ask something again, `lastQ` to know what. */
+  const session = { bot: null, lastQ: '' };
+  const intents = packFor(agent, store, session).map((i) => wrapIntent(i, agent, store, emit, session));
   const suggestions = suggestionsFor(agent);
-  return new Assistant({
+  const bot = new Assistant({
     name: agent.name,
     initials: agent.initials,
     tag: `${agent.model} · ${agent.status}`,
-    greeting: `**${agent.name}.** ${agent.purpose}\n\nEvery answer below is assembled from this workspace's own sample records. Watch the inspector on the right — it shows the tool calls, the tokens and which guardrail fired.`,
+    greeting: `**${agent.name}.** ${agent.purpose}\n\nI answer from this workspace's own sample records, and I can act on them: ask me to do something and I show you what I understood, then apply it when you press the button. Ask **"what can you do?"** for the list. Watch the inspector on the right — it shows the tool calls, the tokens and which guardrail fired.`,
     suggestions,
     intents,
     fallbacks: [
@@ -900,12 +963,26 @@ export function buildAgentBot(store, agent, { emit } = {}) {
     note: 'Demo agent — replies are matched locally against sample data. No model, no network.',
     context: () => ({ state: store.state, agent }),
   });
+  session.bot = bot;
+  return bot;
 }
 
 /* ---------- the global console assistant ---------- */
 export function buildConsoleBot(store) {
   const S = () => store.state;
   const intents = [
+    /* instructions before questions — see packFor */
+    ...consoleActions(store),
+    {
+      id: 'capabilities',
+      match: [/what can you do|what can i ask|capabilit|what are you able|help me|what do you do/i, 'your abilities'],
+      trace: 'read my own action list',
+      answer: () => ({
+        text: `I read the whole workspace rather than one agent — run health, failures, escalations, cost, connections, workflows, and any agent by name.\n\n**I also change it.** Ask for one of these and I show you exactly what I would touch, then apply it when you press the button. Nothing is written before that.`,
+        table: T(['Say this', 'And I will'], ACTION_CATALOGUE.console.map((r) => [r.ask, r.does])),
+        suggestions: ACTION_CATALOGUE.console.slice(0, 3).map((r) => r.ask).concat('How is the workspace doing?'),
+      }),
+    },
     {
       id: 'health',
       match: [
@@ -1068,14 +1145,14 @@ export function buildConsoleBot(store) {
     name: 'Agentline Console',
     initials: 'AC',
     tag: 'Workspace console',
-    greeting: 'I read the whole workspace rather than one agent: run health, what failed, what was escalated, where the cost goes, which connections are down, which agent is busiest, the workflows and any single agent by name.',
+    greeting: 'I read the whole workspace rather than one agent: run health, what failed, what was escalated, where the cost goes, which connections are down, which agent is busiest, the workflows and any single agent by name.\n\nI can also change it — run a workflow, add or remove a step, connect a tool, pause an agent, toggle a guardrail, re-run a failure. Ask **"what can you do?"** for the list. Every change shows you what it will touch and waits for you to press the button.',
     suggestions: CONSOLE_SUGGESTIONS,
     intents,
     fallbacks: [
       `I could not place that. Try "${CONSOLE_SUGGESTIONS[0]}" or "${CONSOLE_SUGGESTIONS[1]}".`,
-      `No match. I answer "${CONSOLE_SUGGESTIONS[2]}", "${CONSOLE_SUGGESTIONS[3]}", "Which agent is busiest?" and "What is slow?".`,
-      'That is outside what the console reads. Ask about agents, runs, workflows, connections, guardrails or cost.',
-      'Nothing matched. Ask "What happened recently?" or "How does this work?" and I will pull it from the workspace records.',
+      'No match. I answer "Where is the cost going?", "Which connections are down?", "Which agent is busiest?" and "What is slow?".',
+      'That is outside what the console reads. Ask about agents, runs, workflows, connections, guardrails or cost — or tell me to run, pause, connect or re-run something.',
+      'Nothing matched. Ask "What can you do?" and I will list every question I answer and every change I can apply.',
     ],
     note: 'Demo console — answers are matched locally against sample data. No model, no network.',
     context: () => ({ state: store.state }),

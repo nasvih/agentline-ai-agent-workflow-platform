@@ -38,11 +38,16 @@ guardrails, create agents, talk to them. Nothing here is read-only and nothing i
 There is no account and no backend. Clear your browser data, or use **Reset demo data**, and it is
 all gone. It does not sync between browsers or devices.
 
+**The agents do things, not only answer.** An answer may carry actions. The agent states what it
+understood and what it would touch, and changes nothing until the reader presses the button; then it
+applies the change, reports before → after, and writes a real run with a real trace.
+
 **The agents are simulated.** Every reply, tool call, token count and latency figure is generated
 locally from this app's demo data. No model is connected and no request leaves your browser.
 
-The same four blocks are the body of the **About this demo** modal in `src/main.js`, followed by a
-fifth — **The source** — carrying `REPO_URL` and the licence sentence.
+Those blocks are the body of the **About this demo** modal in `src/main.js` — opened from the amber
+button in the top bar, not from the sidebar — followed by the full action catalogue rendered from
+`ACTION_PROBES`, and by **The source** carrying `REPO_URL` and the licence sentence.
 
 ---
 
@@ -60,9 +65,16 @@ index.html
           │      └── sw.js          offline shell cache (registered at the app root)
           ├── src/data.js           seed + lookups (imported by everything)
           ├── src/agent.js          intent packs + guardrail engine
-          ├── src/selftest.js       suggestion routing check
+          │      └── src/actions.js the intents that change the workspace
+          │             └── src/runner.js  run engine · refresh bus · run writer
+          ├── src/topbar.js         notifications · device preview · dark mode
+          ├── src/selftest.js       chip + action routing check
           └── src/views/*.js        render(ctx) -> Node, one module per screen
 ```
+
+`src/runner.js` is the only place a workflow is executed. Both the **Run workflow** button in
+`views/workflows.js` and an agent told to run one call the same `executeWorkflow`, so the two can
+never drift apart.
 
 `main.js` owns the only router. Each view module exports a single `render(ctx)` that returns a
 detached DOM node; `main.js` clears `#view` and appends it. Views never re-render themselves
@@ -106,9 +118,13 @@ state
 │                 tokensIn, tokensOut, costPaise, question?, guardrails[]{id,verdict},
 │                 trace[]{label,kind,status,ms,detail}
 ├── tickets[]     the support queue the triage agent reads
+│                 + escalationRef and status 'escalated' once an agent hands one over
 ├── invoices[]    the supplier invoices the extraction agent reads
-├── accounts[]    the onboarding book
+│                 + postedToSheet, approvalState, postedAt once an agent posts one
+├── accounts[]    the onboarding book (stepIdx and stuckDays move when an agent advances one)
 ├── metrics[]     eight weeks of run volume, success, escalations, tokens, cost
+├── reports[]     id, title, createdAt, agentId, body, metrics — written by the Report
+│                 Writer when it is told to store a summary, listed under Settings
 └── counters      runSeq, agentSeq, escalationSeq
 ```
 
@@ -126,8 +142,11 @@ Cost is held in paise as an integer and rendered by `rupees()`. The demo token r
 | `lib/pwa.js` | Service worker registration and the **Install app** control (copied from the kit, unmodified). |
 | `sw.js` | Offline shell cache. Its `SHELL` array lists every file this app needs to boot. |
 | `src/data.js` | `seedState()` and every lookup helper (`agentById`, `toolById`, `guardById`, `workflowById`, `guardActive`, `estimateCost`, `rupees`, `newRunId`), plus `MODELS` and the status-to-pill maps. |
-| `src/agent.js` | `wrapIntent` (the guardrail engine), the four packs, the shared intents, `packFor`, `buildAgentBot`, `buildConsoleBot`, `redactText`, `CONSOLE_SUGGESTIONS`, `AGENT_SUGGESTIONS`, `GUARDRAIL_PROBES`. |
-| `src/selftest.js` | Routes every suggestion chip and guardrail probe through `Assistant._route` and asserts none reaches the fallback. |
+| `src/agent.js` | `wrapIntent` (the guardrail engine), the four packs, the shared intents, `packFor`, `buildAgentBot`, `buildConsoleBot`, `redactText`, `CONSOLE_SUGGESTIONS`, `AGENT_SUGGESTIONS`, `GUARDRAIL_PROBES`, `ACTION_PROBES`, `SCOPE_LABEL`. |
+| `src/actions.js` | Every intent that changes something: `consoleActions`, `agentActions`, `guardToggleIntent`, `toolConnIntent`, the four domain actions, and `ACTION_CATALOGUE` / `catalogueFor` — the single source of truth for what the agents claim they can do. |
+| `src/runner.js` | `planRun` / `executeWorkflow` (the run engine), `requestWorkflowRun` / `consumeWorkflowRun` (the hand-off to the Workflows screen), `writeActionRun`, and the `onAppRefresh` / `refreshApp` bus. |
+| `src/topbar.js` | The three top-bar controls: notifications (`buildNotes` derives them from live state), device preview (the phone `<iframe>`), and the dark-mode toggle. |
+| `src/selftest.js` | Routes every suggestion chip, guardrail probe and action phrase through `Assistant._route`; action phrases must also land on the advertised intent and offer a runnable button. |
 | `src/views/agents.js` | Card grid, detail drawer, create/edit modal, pause/activate, delete. |
 | `src/views/playground.js` | Agent picker, `Assistant.mountInto`, the run inspector rail, guardrail probes. |
 | `src/views/workflows.js` | Workflow list, node editor, `planRun`, the streaming run log, add-step modal. |
@@ -196,11 +215,91 @@ await agentline.selfTest()
 // -> { tested, passed, failed, agents, results, failures }
 ```
 
-It routes each question through `Assistant._route` without composing an answer or writing a run, so
-it is safe to run at any time, and it covers the console, every agent in the current state
-(including agents you created in the UI, which use the generic pack) and all three guardrail probes
-against each of them. Failures are logged with the source and the question. Current state:
-**32 routed for the seeded workspace, 39 with a fifth agent added, zero failures.**
+It routes each question through `Assistant._route` and, for action phrases only, composes the answer
+as well — composing is read-only, because an action mutates the store inside `run()` and `run()` is
+never called here. It covers the console, every agent in the current state (including agents you
+created in the UI, which use the generic pack), all three guardrail probes against each of them, and
+every phrase in `ACTION_CATALOGUE`. Failures are logged with the source and the question. Current
+state: **52 checks for the seeded workspace — 20 chips, 12 probes, 20 action phrases — zero
+failures.** Adding an agent in the UI adds four chips, three probes and two shared action phrases.
+
+## Action intents
+
+An ordinary intent answers. An action intent answers **and offers to change the workspace**. The
+contract is enforced by `lib/assistant.js`:
+
+```js
+answer(q, ctx) -> { text, table?, actions: [{ label, doingLabel?, run }] }
+run()          -> { text, table?, meta?, suggestions?, actions?, then? }
+```
+
+`_renderActions` draws the buttons in a `.msg__actions` row under the reply. Pressing one disables
+the row, swaps the label for `doingLabel`, awaits `run()` — it may be async — removes the row so it
+cannot be pressed twice, and appends the result as the next message. A result may carry its own
+actions, which is how "run it" chains into "open the trace".
+
+Three rules hold for every action in `src/actions.js`:
+
+1. **Never mutate without a press.** `answer` only reads. Every write is inside `run()`.
+2. **Name what will be touched.** The answer lists the exact records — workflow, step, ticket,
+   invoice, connection, agent, rule — before the button exists.
+3. **Report before → after.** The result is a two-column table of what moved, and the change is
+   visible in Runs, Workflows, Guardrails, Tools or Agents immediately.
+
+| Intent | Where | Touches |
+|---|---|---|
+| `wfrun` | console | Runs a named workflow through `requestWorkflowRun` |
+| `wfstep` | console | Adds or removes a step on a named workflow |
+| `toolconn` | console + every agent | `tools[].connected` |
+| `agentstate` | console | `agents[].status` |
+| `rerun` | console | Re-checks connections and writes a new run from a failed one |
+| `guardtoggle` | console + every agent | `guardrails[].enabled`, then re-asks the previous question |
+| `ticketaction` | Support Triage | Escalates (`ESC-` reference, `counters.escalationSeq`) or reassigns a ticket |
+| `postinvoice` | Invoice Reader | Posts an invoice to Payables Q3 as *pending approval* |
+| `advance` | Onboarding Assistant | Moves an account to the next checklist step |
+| `genreport` | Report Writer | Writes and stores a weekly summary in `state.reports` |
+
+### The refresh bus
+
+An action mutates the store, then calls `refreshApp()` from `src/runner.js`. `main.js` subscribes
+once:
+
+```js
+onAppRefresh(() => {
+  topbar.refresh();                                   // notification count
+  if (current === 'playground') { paintNav(); return; }  // never redraw the chat
+  nav.go();                                           // re-read the hash, keep params
+});
+```
+
+The Playground is deliberately excluded: redrawing it would rebuild the `Assistant` and throw away
+the conversation the button was pressed in. Everything the action changed is still in the store, so
+navigating to Guardrails or Runs shows it — no reload.
+
+### Running a workflow from a conversation
+
+An agent asked to run a workflow does not run it out of sight. `requestWorkflowRun` parks the
+request, navigates to `#/workflows/<id>`, and that view picks it up with `consumeWorkflowRun` in a
+`queueMicrotask` and streams the steps into its own run log. The promise resolves with the run
+summary, which becomes the reply. If nothing claims the request within 1.6 s — no view mounted, for
+instance — the run happens anyway with `pace: 0` and the app refreshes. There is no path where the
+button reports a run that did not happen.
+
+### Operator instructions and the guardrails
+
+An action intent carries `operator: true`. `wrapIntent` then skips the topic and escalation checks
+and records one `skipped` event explaining why: "escalate this ticket" is an instruction from the
+person using the product, not customer text that should trip the escalation trigger. Redaction and
+the cost ceiling still apply, and a turn that ends anything other than `success` has its `actions`
+stripped — a refusal does not get to offer buttons.
+
+### Re-asking the previous question
+
+`buildAgentBot` creates a `session` object (`{ bot, lastQ }`), passes it into the pack and into
+`wrapIntent`, which records `lastQ` for every non-operator turn. `guardtoggle` reads it, tells you
+which question it is about to repeat, and after applying the change calls `session.bot.ask(prev)`
+from the result's `then`. Ask *who do I contact about the oldest open item?*, then *turn off PII
+redaction and ask that again*, and the masked and unmasked answers sit one above the other.
 
 ## The guardrail engine
 
@@ -329,8 +428,8 @@ from what is on screen.
 In the rail `.shell.is-rail .side__brandbtns` stacks the pair into a column under the mark, so both
 stay reachable inside 64px.
 
-`#sidefoot` below holds, in order: **About this demo**, then a `.side__pair` with the dark
-`.side__site` link out to nasvih.in beside **Source on GitHub** pointing at `REPO_URL`, then a
+`#sidefoot` below holds, in order: a `.side__pair` with the dark
+`.side__site` link out to nasvih.in beside **GitHub** pointing at `REPO_URL`, then a
 second `.side__pair` with the install control (see below) beside **Reset demo data**, then
 **Keyboard shortcuts**. A pair is a flex row whose children share the width and truncate their
 labels rather than overflow, and the kit stacks it back into a column in the rail. Both links are
@@ -339,6 +438,72 @@ and an `aria-label` ending "opens in a new tab". Only nasvih.in carries `.side__
 repository link is an ordinary outline control, because one inverted element is the point of the
 inverted element. Everything in the footer is a `.btn`, so it collapses to its glyph in rail mode
 with the label kept in `title`/`aria-label`.
+
+*About this demo* is **not** in the footer. It is the amber `#aboutbtn` pill in the top bar, where a
+first-time reader looks for it, and it is the same `showAbout()` modal.
+
+## Top bar controls
+
+`src/topbar.js` mounts three icon-only controls into `#topbartools`, between the page title and the
+About button. All three are `<button>`s with `aria-label` and `title`, and none of them is
+colour-only.
+
+### Notifications
+
+`buildNotes(state)` derives the list from the store every time the panel opens — nothing is stored
+except which ids have been read. Sources, in one pass over the data:
+
+| Source | Id | Tone |
+|---|---|---|
+| Runs with status `failed` | `fail:<runId>` | bad |
+| Runs with status `escalated`, and tickets an agent escalated | `esc:<runId>`, `tick:<ticketId>` | warn |
+| Runs with a `blocked` guardrail verdict | `block:<runId>` | info |
+| Runs whose `costPaise` exceeds the live ceiling | `cost:<runId>` | warn |
+| Disconnected tools | `tool:<toolId>` | bad |
+
+Ids are stable, which is what makes "read" stick. `prefs.readNotes` is pruned to ids that still
+exist on every write, so it cannot grow forever. The badge shows the unread count (`9+` above nine)
+and is hidden at zero. A row can be marked read on its own, all of them at once, or read implicitly
+by clicking through to the run or screen behind it. With no sources at all the panel carries a
+proper empty state rather than a blank box.
+
+Two details worth keeping: the outside-click handler ignores events whose target is no longer
+connected to the document, because marking one item read repaints the list under the pointer and
+that is not an outside click; and **Reset demo data** clears `readNotes`, because the seed is
+deterministic and the rebuilt runs carry the same ids.
+
+### Device preview
+
+A phone and a desktop icon, `aria-pressed` on both. Phone mode appends a `.devframe` overlay: the
+app name, a "Back to desktop" button, and an `<iframe>` of `./index.html?frame=1<hash>` at
+390 × 844 inside a dark bezel on an `--amber-fill` surround. It is an iframe rather than a scaled
+screenshot so the real breakpoints apply. `fit()` scales the bezel with `transform` on resize and
+sizes the slot to the scaled box, so the surround never scrolls sideways.
+
+Two things keep the two copies from fighting:
+
+- `main.js` hides `#shell` **and empties `#view`** on entry, so the Playground chat is never mounted
+  twice; `render()` returns early while `phoneMode` is on, and leaving re-renders the current route.
+- The framed copy sets `body.is-framed` from the `frame=1` query flag, and `initTopbar` does not
+  mount the device control at all when `framed` is true.
+
+Both copies share one origin and therefore one `localStorage`, so a change made inside the frame is
+a change to the workspace.
+
+### Dark mode
+
+`data-theme="dark"` on `<html>`, persisted in `agentline.ui.v1` as `theme`. With nothing stored the
+app follows `prefers-color-scheme` and keeps following it — the media listener only applies while
+the reader has made no explicit choice. A small inline script in `index.html` sets the attribute
+before first paint from the same key and the same rule, so a dark reader never gets a white flash.
+The button swaps between a moon and a sun and updates `theme-color`.
+
+The palette is the kit's (`assets/app.css`, section 14): surfaces darken, hairlines lift, the yellow
+does not move and keeps `--on-amber` ink text on it. `assets/agentline.css` section 16 covers the
+places a token alone cannot: the yellow sidebar and the yellow device-preview surround **redefine
+the ink tokens back to their light values inside themselves**, because they are light surfaces
+whatever the theme; the select arrow is redrawn in the dark muted grey; and the switch track,
+`--night` blocks and the notification badge get explicit values.
 
 Under 900px the sidebar is a drawer, and `.shell.is-rail` would otherwise out-specify the
 responsive rule and claim a 64px grid column. `assets/agentline.css` overrides the rail inside the
@@ -389,8 +554,15 @@ anywhere.
   <kbd>Esc</kbd> or the scrim.
 - Layouts hold at 390px: the playground stacks under 1180px, the agent grid and workflow columns
   under 900px, and the inspector statistics go single column under 400px.
-- Icon-only controls carry `aria-label` — step reorder and removal, switches, drawer close, the
-  menu button, the assistant launcher, and both sidebar toggles in rail mode.
+- Icon-only controls carry `aria-label` and `title` — step reorder and removal, switches, drawer
+  close, the menu button, the assistant launcher, both sidebar toggles, and the three top-bar
+  controls. The bell's accessible name carries the unread count, so the badge is never the only
+  signal.
+- The top bar sheds weight rather than overflowing: the sub-label goes at 900px, **Reset demo data**
+  at 760px (the sidebar footer keeps one), and at 640px the device control shows only the button
+  that would change something. Nothing on any screen exceeds 390px.
+- The notification panel is anchored under the bell on a wide screen and pinned to the viewport
+  edges under 640px, so it can never open off-screen.
 - The run log and the workflow status pill are `aria-live` regions.
 - Focus is visible everywhere via the shared `:focus-visible` ring; `prefers-reduced-motion` stops
   the streaming and blip animations.
@@ -404,3 +576,9 @@ anywhere.
   workflow.
 - Nothing is validated as a schema. Editing state by hand in `localStorage` will break the screens
   until you reset.
+- Actions understand the phrasings in `ACTION_CATALOGUE` and close variations of them. They are
+  regular expressions, not language understanding: an unusual sentence falls through to an ordinary
+  answer or the fallback line, never to a silent change.
+- Device preview is a same-origin iframe, so it shares the workspace with the desktop copy. It is a
+  layout preview, not a device emulator — touch behaviour, pointer coarseness and mobile browser
+  chrome are still your desktop browser's.

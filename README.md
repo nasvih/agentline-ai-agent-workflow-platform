@@ -17,6 +17,24 @@ Part of a suite of six standalone demo applications.
 
 ---
 
+## Tech stack
+
+- **Plain HTML, CSS and ES modules.** No framework, no dependencies, no build step, no bundler —
+  the files you read are the files the browser runs.
+- **State in `localStorage`.** One key for the workspace, one for interface preferences. No account,
+  no backend, no database.
+- **Inline stroke SVG** for every icon; no icon font and no image sprites.
+- **Inter and JetBrains Mono from Google Fonts** — the one and only request this page makes to
+  another origin.
+- **Service worker + web manifest** for offline use and installing to a home screen or dock.
+- **A simulated agent engine.** Replies come from local intent matching — a question is scored
+  against a list of regular expressions and the winning intent reads this app's own demo records.
+  The tool calls, token counts, latencies, costs and run traces are all generated locally to make
+  the trace read the way a real one would.
+
+No model provider is connected. There is no API key, no inference, and no request of any kind leaves
+your browser.
+
 ## What this is
 
 Agentline is a workspace for putting agents to work. You define an agent, give it the tools it is
@@ -51,12 +69,16 @@ guardrails, create agents, talk to them. Nothing here is read-only and nothing i
 There is no account and no backend. Clear your browser data, or use **Reset demo data**, and it is
 all gone. It does not sync between browsers or devices.
 
+**The agents do things, not only answer.** Tell one to run a workflow, escalate a ticket, post an
+invoice or turn a guardrail off. It shows what it understood and what it would touch, and applies
+nothing until you press the button — then reports what changed, before and after, and writes a real
+record and a real trace you can open in **Runs**.
+
 **The agents are simulated.** Every reply, tool call, token count and latency figure is generated
 locally from this app's demo data. No model is connected and no request leaves your browser.
 
-The same four blocks are in the app, behind the **Demo** pill in the top bar and the
-**About this demo** item in the sidebar footer, followed there by a fifth naming the repository and
-its licence.
+The same blocks are in the app behind **About this demo** in the top bar, along with the full list of
+phrases the agents act on and what each one does.
 
 ---
 
@@ -65,12 +87,12 @@ its licence.
 | Screen | What it does |
 |---|---|
 | **Agents** | The four demo agents plus any you create. Description, model, tools, guardrails, status, success rate, 30-day volume. Pause or activate, edit the definition, open a detail drawer with recent runs, create a new agent, delete one you made. |
-| **Playground** | Full-page chat with the selected agent. A right rail replays the run as it happens: each simulated tool call with its duration, each guardrail check with its verdict, then tokens in, tokens out, latency and cost. Three "guardrail probe" buttons ask questions written to trip a specific rule. |
+| **Playground** | Full-page chat with the selected agent. A right rail replays the run as it happens: each simulated tool call with its duration, each guardrail check with its verdict, then tokens in, tokens out, latency and cost. Three "guardrail probe" buttons ask questions written to trip a specific rule. Agents act here too: ask one to escalate a ticket, post an invoice, advance an account or store a report and it offers a button, then writes the record and the trace. |
 | **Workflows** | Trigger → steps → outputs, as a node list. Add a step, remove one, reorder it, disable it, enable or disable the whole workflow. **Run workflow** streams a step-by-step log with per-step status and duration, then writes a real run into Runs. |
 | **Runs** | History table with status, agent and workflow filters, and CSV export. Click a run id for the full trace timeline, the guardrail verdicts and the run context. Re-run copies it forward. |
 | **Tools & connections** | Email, CRM, Sheets, Ticketing, Webhook. The connect switches are real: disconnect one and every agent question and workflow step that needs it starts failing, with the reason written into the trace. A matrix at the bottom shows which agent is blocked by what. |
 | **Guardrails** | PII redaction, allowed topics, escalation to human, max cost per run. Each has a switch and a live configuration — topic lists, trigger words, handover queue, cost ceiling — plus a redaction preview you can type into. Toggling any of them changes the next reply in the Playground. |
-| **Settings** | Workspace name, environment, default model, region, retention, trace sampling, notifications, distribution list, streaming. Agent CSV export and the reset. |
+| **Settings** | Workspace name, environment, default model, region, retention, trace sampling, notifications, distribution list, streaming. Stored reports written by the Report Writer, agent CSV export and the reset. |
 
 Plus the **Agentline Console**, the workspace-wide assistant. It has exactly one entry point — the
 round launcher at the bottom right, or <kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>K</kbd> — and it
@@ -78,15 +100,56 @@ answers about run health, failures, escalations, cost, connections, guardrails, 
 single agent. The launcher steps aside on the Playground, which is a product screen with its own
 docked chat, so there is never more than one chat affordance on screen.
 
+## What the agents can do
+
+Ask in plain language. The agent replies with what it understood, names the records it would touch,
+and waits. Press the button and it applies the change, then reports before → after. Ask any agent
+**"what can you do?"** and it lists its own actions with a worked example each; the same list is in
+**About this demo**.
+
+| Say this | Where | And it will |
+|---|---|---|
+| Run the invoice intake workflow | Console | Open that workflow, stream every step into the run log, and write the run into **Runs** |
+| Add a step called "Check credit limit" to the invoice intake workflow | Console | Append the step and report the pipeline before and after |
+| Remove the Notify downstream step | Console | Take it out, so the next run skips it entirely |
+| Disconnect the Ticketing connection | Console, any agent | Flip the connection and list the agents and steps that stop working |
+| Pause the Report Writer | Console | Move the agent between live and paused; steps that call it are skipped while paused |
+| Re-run the last failed run | Console | Re-check the connections it needs, run it again, and open the new trace |
+| Turn off PII redaction and ask that again | Any agent | Toggle the rule, then re-ask your previous question so the difference is in the log |
+| Escalate the oldest ticket | Support Triage | Raise an `ESC-` reference in the Tier 2 queue, mark the ticket, write an escalated run |
+| Assign TCK-2041 to the lightest desk | Support Triage | Move it to the person with the fewest open items |
+| Post the next clean invoice for approval | Invoice Reader | Append it to Payables Q3, mark it pending approval, record the sheet call in the trace |
+| Advance the most stuck account | Onboarding Assistant | Move it to the next checklist step and reset its days-on-step |
+| Generate and store this week's report | Report Writer | Write the summary, store it under **Settings**, record the run |
+
+Nothing is ever applied without a press, and every applied action lands somewhere you can see it —
+**Runs**, **Workflows**, **Guardrails**, **Tools** or **Agents** — immediately, without a reload.
+
+## Top bar
+
+Three icon-only controls sit beside **About this demo**, all keyboard reachable and labelled for
+screen readers.
+
+- **Notifications** — a bell with an unread count, built from live data every time it opens: failed
+  runs, escalations waiting for a person, guardrail blocks, runs over the cost ceiling and
+  disconnected tools. Click one to jump to it, mark one read or mark them all; read state is
+  remembered per browser. When nothing needs you, it says so.
+- **Device preview** — a phone and a desktop icon. Phone mode drops the app into a 390 × 844 frame
+  on a yellow surround. It is an `<iframe>` of this same application, not a scaled screenshot, so
+  the real breakpoints apply; the framed copy hides the device toggle, and **Back to desktop**
+  returns.
+- **Dark mode** — sets `data-theme="dark"` on `<html>` and remembers it. On a first visit it follows
+  your operating system. The brand yellow stays yellow in both themes and always carries ink text.
+
 Two icon-only shell controls sit on the sidebar brand row, right of the app name, both remembered
 between visits. A panel with a chevron shrinks the navigation to a 64px icon rail
 (*Collapse sidebar* / *Expand sidebar*), and a circle half filled switches the sidebar between the
 brand yellow and plain white. **Yellow is the default.** The colour control names no colour: it is
 labelled *Sidebar colour* for screen readers and reports the tone through `aria-pressed`.
 
-The footer below holds **About this demo** across the top, then a link out to nasvih.in beside
-**Source on GitHub**, then **Reset demo data** — joined by **Install app** when the browser offers
-one — and finally **Keyboard shortcuts**.
+The footer below holds a link out to nasvih.in beside **GitHub**, then **Reset demo data** — joined
+by **Install app** when the browser offers one — and finally **Keyboard shortcuts**. *About this
+demo* lives in the top bar, not here.
 
 ## Install it
 
@@ -119,16 +182,19 @@ python3 -m http.server 4105
 It must be served over HTTP — the app is made of ES modules, so opening `index.html` from the file
 system will be blocked by the browser.
 
-Every suggestion chip in the app has to route to a real answer. To check that yourself, open the
-browser console and run:
+Every suggestion chip has to route to a real answer, and every action the product claims has to
+reach the intent that performs it. To check that yourself, open the browser console and run:
 
 ```js
 await agentline.selfTest()
-// { tested: 32, passed: 32, failed: 0, agents: 4, ... }
+// { tested: 52, passed: 52, failed: 0,
+//   chips: 20, probes: 12, actionIntents: 20, agents: 4, ... }
 ```
 
-It asks every chip and every guardrail probe — the console's, each agent's, and any agent you have
-created — and reports anything that would fall through to a "no match" reply.
+It routes every suggestion chip (the console's, each agent's, and any agent you have created), every
+guardrail probe, and every phrase in the action catalogue — asserting that each action phrase lands
+on the intent it advertises *and* that the intent offers at least one runnable button. It composes
+answers only; no action is applied and nothing is written.
 
 ## Deploy to GitHub Pages
 
@@ -155,7 +221,10 @@ agentline/
   src/main.js             boot: store, nav, router, shell, console agent
   src/data.js             seeded demo dataset and helpers
   src/agent.js            intent packs and the guardrail engine
-  src/selftest.js         suggestion routing self-test
+  src/actions.js          the intents that change the workspace
+  src/runner.js           workflow run engine, refresh bus, action run writer
+  src/topbar.js           notifications, device preview, dark mode
+  src/selftest.js         chip and action routing self-test
   src/views/agents.js
   src/views/playground.js
   src/views/workflows.js
@@ -170,8 +239,10 @@ agentline/
 
 - All records are generated from a fixed seed, so the numbers are the same on every reload until
   you change something. Companies, people and figures are invented.
-- State is written to one `localStorage` key, `agentline.demo.v1`. Sidebar preferences live in a
-  second key, `agentline.ui.v1`, which **Reset demo data** deliberately leaves alone.
+- State is written to one `localStorage` key, `agentline.demo.v1`. Interface preferences live in a
+  second key, `agentline.ui.v1` — sidebar rail and colour, the theme, and which notifications you
+  have read. **Reset demo data** leaves the preferences alone but does clear the read notifications,
+  because the rebuilt seed produces the same run ids.
 - Run history is capped at 90 entries.
 - Currency is `₹`. Costs are shown in rupees at a made-up token rate.
 - The only request the page makes to another origin is the font stylesheet in the document head.
