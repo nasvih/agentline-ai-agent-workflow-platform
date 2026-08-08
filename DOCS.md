@@ -41,7 +41,8 @@ all gone. It does not sync between browsers or devices.
 **The agents are simulated.** Every reply, tool call, token count and latency figure is generated
 locally from this app's demo data. No model is connected and no request leaves your browser.
 
-The same four blocks are the body of the **About this demo** modal in `src/main.js`.
+The same four blocks are the body of the **About this demo** modal in `src/main.js`, followed by a
+fifth — **The source** — carrying `REPO_URL` and the licence sentence.
 
 ---
 
@@ -319,9 +320,12 @@ Two sidebar-footer buttons, both `aria-pressed` and both persisted under `agentl
   than an ink fill, so the link out to nasvih.in stays the only solid dark block in the footer.
 
 Below them, `#sidefoot` holds the install control (see below), **Reset demo data**, **About this
-demo**, a dark `.side__site` link out to nasvih.in (`target="_blank"`, `rel="noopener noreferrer"`,
-`aria-label` saying it opens in a new tab) and **Keyboard shortcuts**. Everything in the footer is a
-`.btn`, so it collapses to its glyph in rail mode with the label kept in `title`/`aria-label`.
+demo**, a dark `.side__site` link out to nasvih.in, **Source on GitHub** pointing at `REPO_URL`, and
+**Keyboard shortcuts**. Both links are built by the same `footLink()` helper, so both get
+`target="_blank"`, `rel="noopener noreferrer"` and an `aria-label` ending "opens in a new tab". Only
+nasvih.in carries `.side__site`; the repository link is an ordinary outline control, because one
+inverted element is the point of the inverted element. Everything in the footer is a `.btn`, so it
+collapses to its glyph in rail mode with the label kept in `title`/`aria-label`.
 
 Under 900px the sidebar is a drawer, and `.shell.is-rail` would otherwise out-specify the
 responsive rule and claim a 64px grid column. `assets/agentline.css` overrides the rail inside the

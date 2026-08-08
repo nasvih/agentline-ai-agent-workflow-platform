@@ -9,6 +9,9 @@ tools, its own guardrails and its own intent pack, so the same question gets a d
 depending on who you ask. Workflows chain them together. Every turn and every workflow run is
 recorded with a full trace.
 
+**Source:** https://github.com/nasvih/agentline-ai-agent-workflow-platform — published so it can be
+read, run and evaluated. It is not open source; see [Licence](#licence).
+
 Part of a suite of six standalone demo applications.
 **Muhammed Nasvih V** — [nasvih.in](https://www.nasvih.in) · [github.com/nasvih](https://github.com/nasvih)
 
@@ -52,7 +55,8 @@ all gone. It does not sync between browsers or devices.
 locally from this app's demo data. No model is connected and no request leaves your browser.
 
 The same four blocks are in the app, behind the **Demo** pill in the top bar and the
-**About this demo** item in the sidebar footer.
+**About this demo** item in the sidebar footer, followed there by a fifth naming the repository and
+its licence.
 
 ---
 
@@ -78,7 +82,8 @@ The sidebar footer carries two shell controls, both remembered between visits: *
 the navigation to a 64px icon rail, and the tone control switches the sidebar between the brand
 yellow and plain white. **Yellow is the default** — the button reads `White` while yellow is on,
 because the label says what the click does. Under it sit **Install app** (only when the browser
-offers it), **Reset demo data**, **About this demo** and a link out to nasvih.in.
+offers it), **Reset demo data**, **About this demo**, a link out to nasvih.in and
+**Source on GitHub**.
 
 ## Install it
 

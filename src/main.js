@@ -55,10 +55,14 @@ const readUI = () => { try { return JSON.parse(localStorage.getItem(UI_KEY)) || 
 const ui = { rail: false, amber: true, ...readUI() };
 const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (_) {} };
 
-/* three local glyphs, same inline-stroke style as the shared set */
+/* where this application's source is published */
+const REPO_URL = 'https://github.com/nasvih/agentline-ai-agent-workflow-platform';
+
+/* four local glyphs, same inline-stroke style as the shared set */
 const ICON_RAIL = '<svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8.5 4v12"/></svg>';
 const ICON_TONE = '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor" stroke="none"/></svg>';
 const ICON_OUT = '<svg viewBox="0 0 20 20"><path d="M11.5 3.5H16v4.5"/><path d="M16 3.5L9.5 10"/><path d="M14 11.5V15a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 15V7.5A1.5 1.5 0 0 1 5 6h3.5"/></svg>';
+const ICON_CODE = '<svg viewBox="0 0 20 20"><path d="M7.1 5.8L2.9 10l4.2 4.2"/><path d="M12.9 5.8L17.1 10l-4.2 4.2"/><path d="M11.4 4.1L8.6 15.9"/></svg>';
 
 function paintNav() {
   const s = store.state;
@@ -107,6 +111,14 @@ function paintFoot() {
     onclick, html: `${glyph}<span>${esc(label)}</span>`,
   }, extra || {}));
 
+  const footLink = (label, glyph, href, cls) => h('a', {
+    class: `btn btn--block btn--sm${cls ? ` ${cls}` : ''}`,
+    href, target: '_blank', rel: 'noopener noreferrer',
+    title: `${label} — opens in a new tab`,
+    'aria-label': `${label} — opens in a new tab`,
+    html: `${glyph}<span>${esc(label)}</span>`,
+  });
+
   const railLabel = ui.rail ? 'Expand sidebar' : 'Collapse sidebar to icons';
   const toneLabel = ui.amber ? 'Use the white sidebar' : 'Use the yellow sidebar';
 
@@ -127,16 +139,11 @@ function paintFoot() {
 
   /* the only dark element in the sidebar, so it reads as a link out of the
      product whichever tone the navigation is set to */
-  const siteLabel = 'nasvih.in — opens in a new tab';
-  foot.appendChild(h('a', {
-    class: 'btn btn--block btn--sm side__site',
-    href: 'https://www.nasvih.in',
-    target: '_blank',
-    rel: 'noopener noreferrer',
-    title: siteLabel,
-    'aria-label': siteLabel,
-    html: `${ICON_OUT}<span>nasvih.in</span>`,
-  }));
+  foot.appendChild(footLink('nasvih.in', ICON_OUT, 'https://www.nasvih.in', 'side__site'));
+
+  /* the repository sits next to it as an ordinary outline control — one
+     inverted element in the footer is the point of the inverted element */
+  foot.appendChild(footLink('Source on GitHub', ICON_CODE, REPO_URL));
 
   foot.appendChild(footBtn('Keyboard shortcuts', icon('key'), showShortcuts));
   foot.appendChild(h('div', { class: 'side__ver' }, 'demo build · local data only'));
@@ -181,6 +188,11 @@ function showAbout() {
         <p><strong>You can actually use it.</strong> Build workflows, add and remove steps, run them, toggle tools and guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.</p>
         <p><strong>Your data stays on your machine.</strong> Everything you enter is saved in this browser's local storage. There is no account and no backend. Clear your browser data, or use <strong>Reset demo data</strong>, and it is all gone.</p>
         <p><strong>The agents are simulated.</strong> Every reply, tool call, token count and latency figure is generated locally from this app's demo data. No model is connected and no request leaves your browser.</p>
+      </section>
+      <section class="aboutblock">
+        <h4>The source</h4>
+        <p><a class="aboutsrc" href="${REPO_URL}" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub — opens in a new tab">${esc(REPO_URL.replace('https://', ''))}</a></p>
+        <p>The source is published so it can be read, run and evaluated — it is not open source, and copying, modifying, redistributing or using it in your own work needs the author's written permission.</p>
       </section>`,
     actions: [{ label: 'Got it', class: 'btn--primary' }],
   });
