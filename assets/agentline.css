@@ -49,7 +49,7 @@
 
 /* == 3. playground + inspector == */
 .pg{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:var(--gutter);align-items:start}
-.pg__chat{height:calc(100vh - var(--bar) - 190px);min-height:440px;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+.pg__chat{height:calc(100vh - var(--bar) - 250px);min-height:440px;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
 .pg__chat .assist{height:100%}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
 .seg__btn{display:flex;align-items:center;gap:8px;border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r);
@@ -197,3 +197,38 @@
   border-radius:var(--r-sm);padding:8px 11px;line-height:1.5}
 .rail .simnote{border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--amber-soft)}
 .simnote--top{margin-bottom:10px}
+
+/* == 11. one chat affordance at a time ==
+   The Playground is a product screen with its own docked composer, so the
+   floating console launcher steps aside there. Cmd K still opens it. */
+body.is-playground .assist-fab{display:none}
+
+/* == 12. sidebar rail + tone: app-level tidy-ups == */
+.shell.is-rail .side__ver{display:none}
+.shell.is-rail .side__brand{gap:0}
+.side[data-tone="amber"] .side__ver{color:var(--amber-darker)}
+.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--amber-fill)}
+.side__toggles .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
+.side__toggles .btn{min-width:0;overflow:hidden;padding-left:8px;padding-right:8px}
+
+/* Under 900px the sidebar is a drawer, so the rail must not claim a grid
+   column or strip the labels the drawer needs. Overrides the shared rules. */
+@media (max-width:900px){
+  .shell.is-rail{grid-template-columns:minmax(0,1fr)}
+  .shell.is-rail .side{width:var(--sidebar)}
+  .shell.is-rail .side__name,
+  .shell.is-rail .side__tag,
+  .shell.is-rail .navgroup__label,
+  .shell.is-rail .side__ver{display:block}
+  .shell.is-rail .navlink span,
+  .shell.is-rail .navlink__count,
+  .shell.is-rail .side__foot .btn span{display:inline}
+  .shell.is-rail .navlink__count{margin-left:auto}
+  .shell.is-rail .side__brand{justify-content:flex-start;padding:0 18px;gap:10px}
+  .shell.is-rail .side__nav{padding:14px 12px}
+  .shell.is-rail .navlink{justify-content:flex-start;padding:8px 10px}
+  .shell.is-rail .navgroup+.navgroup{margin-top:18px;border-top:0;padding-top:0}
+  .shell.is-rail .side__foot{padding:12px}
+  .shell.is-rail .side__foot .btn{padding:8px 14px}
+  .shell.is-rail .side__toggles{flex-direction:row}
+}

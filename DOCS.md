@@ -88,7 +88,7 @@ Cost is held in paise as an integer and rendered by `rupees()`. The demo token r
 
 | File | Responsibility |
 |---|---|
-| `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, About and shortcut modals, reset, the global console agent, go-to key handling. |
+| `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, rail and colour toggles, About and shortcut modals, reset, the global console agent, go-to key handling. |
 | `src/data.js` | `seedState()` and every lookup helper (`agentById`, `toolById`, `guardById`, `workflowById`, `guardActive`, `estimateCost`, `rupees`, `newRunId`), plus `MODELS` and the status-to-pill maps. |
 | `src/agent.js` | `wrapIntent` (the guardrail engine), the four packs, the shared intents, `packFor`, `buildAgentBot`, `buildConsoleBot`, `redactText`, `CONSOLE_SUGGESTIONS`, `AGENT_SUGGESTIONS`, `GUARDRAIL_PROBES`. |
 | `src/selftest.js` | Routes every suggestion chip and guardrail probe through `Assistant._route` and asserts none reaches the fallback. |
@@ -267,6 +267,32 @@ Rules kept throughout: solid colours only — no gradients, no blur, no glow sha
 Icons are inline stroke SVG from `ICONS` using `currentColor`. Status is never signalled by colour
 alone; a pill always carries the word.
 
+## Shell controls
+
+Two sidebar-footer buttons, both `aria-pressed` and both persisted under `agentline.ui.v1`
+(separate from the workspace data, so **Reset demo data** does not undo them):
+
+- **Collapse / Expand** toggles `is-rail` on `.shell` — a 64px icon rail with labels, counts and
+  group headings hidden. Nav links pick up `title` and `aria-label` in rail mode. The nav icon is a
+  direct child of the link rather than being wrapped in a span, because rail mode hides every span
+  inside a `.navlink` and the glyph has to survive that.
+- **Yellow / White** toggles `data-tone="amber"` on `.side`. Ink text on `#EAC81C` throughout —
+  never white on yellow.
+
+Under 900px the sidebar is a drawer, and `.shell.is-rail` would otherwise out-specify the
+responsive rule and claim a 64px grid column. `assets/agentline.css` overrides the rail inside the
+900px media query so the drawer keeps its full width and its labels regardless of the setting.
+
+### One chat affordance at a time
+
+The console has a single entry point: the floating round launcher, plus
+<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>K</kbd>. There is no topbar or sidebar duplicate. On the
+Playground — a product screen with its own docked composer — the launcher is hidden by
+`body.is-playground .assist-fab { display: none }`, which is used in preference to the assistant's
+own `hidden` flag so that opening and closing the panel cannot bring it back. Navigating to the
+Playground with the console open closes it. The keyboard shortcut still reaches the console from
+anywhere.
+
 ## Accessibility and responsiveness
 
 - Sidebar collapses under 900px behind a labelled menu button with `aria-expanded`, dismissed by
@@ -274,7 +300,7 @@ alone; a pill always carries the word.
 - Layouts hold at 390px: the playground stacks under 1180px, the agent grid and workflow columns
   under 900px, and the inspector statistics go single column under 400px.
 - Icon-only controls carry `aria-label` — step reorder and removal, switches, drawer close, the
-  menu button.
+  menu button, the assistant launcher, and both sidebar toggles in rail mode.
 - The run log and the workflow status pill are `aria-live` regions.
 - Focus is visible everywhere via the shared `:focus-visible` ring; `prefers-reduced-motion` stops
   the streaming and blip animations.

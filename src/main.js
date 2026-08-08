@@ -2,7 +2,7 @@
    Agentline — boot: store, nav, router, shell wiring, console agent.
    ============================================================ */
 
-import { h, qs, icon, createStore, router, toast, confirmDialog, modal } from '../lib/ui.js';
+import { h, qs, esc, icon, createStore, router, toast, confirmDialog, modal } from '../lib/ui.js';
 import { STORE_KEY, seedState } from './data.js';
 import { buildConsoleBot } from './agent.js';
 import { selfTest } from './selftest.js';
@@ -42,8 +42,19 @@ const routes = Object.fromEntries(ALL.map((i) => [i.id, i]));
 const navEl = qs('#nav');
 const viewEl = qs('#view');
 const sideEl = qs('#side');
+const shellEl = qs('#shell');
 const scrimEl = qs('#sidescrim');
 let current = 'agents';
+
+/* ---------- sidebar preferences (rail + colour), persisted ---------- */
+const UI_KEY = 'agentline.ui.v1';
+const readUI = () => { try { return JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (_) { return {}; } };
+const ui = { rail: false, amber: false, ...readUI() };
+const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (_) {} };
+
+/* two local glyphs, same inline-stroke style as the shared set */
+const ICON_RAIL = '<svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8.5 4v12"/></svg>';
+const ICON_TONE = '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor" stroke="none"/></svg>';
 
 function paintNav() {
   const s = store.state;
@@ -51,35 +62,53 @@ function paintNav() {
   NAV.forEach((g) => {
     const grp = h('div', { class: 'navgroup' }, h('div', { class: 'navgroup__label' }, g.group));
     g.items.forEach((it) => {
-      const link = h('a', {
+      /* the icon is a direct child, not wrapped in a span: rail mode hides
+         every span inside a navlink, and the glyph has to survive that */
+      const count = it.count ? `<span class="navlink__count">${it.count(s)}</span>` : '';
+      grp.appendChild(h('a', {
         class: `navlink${current === it.id ? ' is-active' : ''}`,
         href: `#/${it.id}`,
         'aria-current': current === it.id ? 'page' : null,
-      },
-      h('span', { html: icon(it.icon) }),
-      h('span', {}, it.label),
-      it.count ? h('span', { class: 'navlink__count' }, String(it.count(s))) : null);
-      grp.appendChild(link);
+        title: ui.rail ? it.label : null,
+        'aria-label': ui.rail ? it.label : null,
+        html: `${icon(it.icon)}<span>${esc(it.label)}</span>${count}`,
+      }));
     });
     navEl.appendChild(grp);
   });
 }
 
+function applyUI() {
+  shellEl.classList.toggle('is-rail', ui.rail);
+  if (ui.amber) sideEl.setAttribute('data-tone', 'amber');
+  else sideEl.removeAttribute('data-tone');
+  paintNav();
+  paintFoot();
+}
+
 function paintFoot() {
   const foot = qs('#sidefoot');
   foot.innerHTML = '';
-  foot.appendChild(h('button', {
-    class: 'btn btn--block btn--sm', onclick: resetDemo,
-    html: `${icon('refresh')}<span>Reset demo data</span>`,
-  }));
-  foot.appendChild(h('button', {
-    class: 'btn btn--block btn--sm', onclick: showAbout,
-    html: `${icon('alert')}<span>About this demo</span>`,
-  }));
-  foot.appendChild(h('button', {
-    class: 'btn btn--block btn--sm', onclick: showShortcuts,
-    html: `${icon('key')}<span>Keyboard shortcuts</span>`,
-  }));
+
+  const footBtn = (label, glyph, onclick, extra) => h('button', Object.assign({
+    class: 'btn btn--block btn--sm', type: 'button', title: label, 'aria-label': label,
+    onclick, html: `${glyph}<span>${esc(label)}</span>`,
+  }, extra || {}));
+
+  const railLabel = ui.rail ? 'Expand sidebar' : 'Collapse sidebar to icons';
+  const toneLabel = ui.amber ? 'Use the white sidebar' : 'Use the yellow sidebar';
+
+  /* short visible labels so the pair fits side by side in a 248px sidebar —
+     the full sentence lives in title and aria-label */
+  foot.appendChild(h('div', { class: 'side__toggles' },
+    footBtn(ui.rail ? 'Expand' : 'Collapse', ICON_RAIL, () => { ui.rail = !ui.rail; saveUI(); applyUI(); },
+      { 'aria-pressed': String(ui.rail), title: railLabel, 'aria-label': railLabel }),
+    footBtn(ui.amber ? 'White' : 'Yellow', ICON_TONE, () => { ui.amber = !ui.amber; saveUI(); applyUI(); },
+      { 'aria-pressed': String(ui.amber), title: toneLabel, 'aria-label': toneLabel })));
+
+  foot.appendChild(footBtn('Reset demo data', icon('refresh'), resetDemo));
+  foot.appendChild(footBtn('About this demo', icon('alert'), showAbout));
+  foot.appendChild(footBtn('Keyboard shortcuts', icon('key'), showShortcuts));
   foot.appendChild(h('div', { class: 'side__ver' }, 'demo build · local data only'));
 }
 
@@ -162,6 +191,13 @@ function render(route, params, query) {
   paintNav();
   setSide(false);
 
+  /* One chat affordance at a time. The Playground is a product screen with
+     its own docked composer, so the floating console launcher steps aside
+     there — Cmd K still reaches the console from anywhere. */
+  const onPlayground = route === 'playground';
+  document.body.classList.toggle('is-playground', onPlayground);
+  if (onPlayground && consoleBot && consoleBot.open) consoleBot.toggle(false);
+
   const ctx = {
     ...ctxBase,
     route, params: params || [], query: query || new URLSearchParams(),
@@ -214,7 +250,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------- go ---------- */
-paintFoot();
+applyUI();
 nav.go();
 
 /* Handle for the suggestion routing self-test:  await agentline.selfTest()

@@ -45,9 +45,14 @@ The same three points are in the app, behind the **Demo** pill in the top bar an
 | **Guardrails** | PII redaction, allowed topics, escalation to human, max cost per run. Each has a switch and a live configuration — topic lists, trigger words, handover queue, cost ceiling — plus a redaction preview you can type into. Toggling any of them changes the next reply in the Playground. |
 | **Settings** | Workspace name, environment, default model, region, retention, trace sampling, notifications, distribution list, streaming. Agent CSV export and the reset. |
 
-Plus the **Agentline Console**, the workspace-wide assistant on the floating launcher
-(<kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>K</kbd>), which answers about run health, failures,
-escalations, cost, connections, guardrails, workflows and any single agent.
+Plus the **Agentline Console**, the workspace-wide assistant. It has exactly one entry point — the
+round launcher at the bottom right, or <kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>K</kbd> — and it
+answers about run health, failures, escalations, cost, connections, guardrails, workflows and any
+single agent. The launcher steps aside on the Playground, which is a product screen with its own
+docked chat, so there is never more than one chat affordance on screen.
+
+The sidebar footer carries two shell controls, both remembered between visits: **Collapse** shrinks
+the navigation to a 64px icon rail, and **Yellow** switches the sidebar to the brand colour.
 
 ## Run it
 
