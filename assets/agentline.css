@@ -15,7 +15,10 @@
 .appfoot .mono{font-size:11px;letter-spacing:.04em}
 .side-scrim{position:fixed;inset:0;background:rgba(23,24,26,.42);z-index:60}
 @media (min-width:901px){ .side-scrim{display:none} }
+/* footer rhythm: About, then the two paired rows, then the shortcuts button */
 .side__foot .btn+.btn{margin-top:8px}
+.side__foot>.side__pair,
+.side__foot>.side__pair+.btn{margin-top:8px}
 .side__ver{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:8px 4px 0}
 
 .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
@@ -220,18 +223,13 @@ body.is-playground .assist-fab{display:none}
 /* same contrast rule as the shared sheet: quiet text on yellow is ink-2, not
    --amber-darker, which falls under AA against the fill */
 .side[data-tone="amber"] .side__ver{color:var(--ink-2)}
-/* pressed toggle on the yellow sidebar: an ink outline, not an ink fill —
-   the link out to nasvih.in is the only solid dark block down here */
-.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]{background:rgba(23,24,26,.10);border-color:rgba(23,24,26,.5);color:var(--ink)}
-.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]:hover{background:rgba(23,24,26,.16)}
-.side__toggles .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
-.side__toggles .btn{min-width:0;overflow:hidden;padding-left:8px;padding-right:8px}
-
-/* the install control keeps its own wrapper so it survives a footer repaint;
-   it is hidden until the browser says installing is possible, so the spacing
-   sits on the button and disappears with it */
-.side__install .btn{margin-top:8px}
-.side__foot>.side__install+.btn{margin-top:8px}
+/* The brand-row controls carry no visible text, so a pressed one has to be
+   readable and not only announced. On the yellow sidebar that is an ink
+   outline, not an ink fill — the link out to nasvih.in is the only solid dark
+   block in the sidebar. */
+.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]{background:rgba(23,24,26,.10);border-color:rgba(23,24,26,.5);color:var(--ink)}
+.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:rgba(23,24,26,.16)}
+.side__brandbtns .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
 
 /* link out to the author's site: the one dark element in the sidebar, so it
    reads the same against the yellow default and the white alternative */
@@ -253,11 +251,14 @@ body.is-playground .assist-fab{display:none}
   .shell.is-rail .navlink__count,
   .shell.is-rail .side__foot .btn span{display:inline}
   .shell.is-rail .navlink__count{margin-left:auto}
-  .shell.is-rail .side__brand{justify-content:flex-start;padding:0 18px;gap:10px}
+  .shell.is-rail .side__brand{flex-direction:row;justify-content:flex-start;height:var(--bar);padding:0 18px;gap:10px}
+  .shell.is-rail .side__brandbtns{margin-left:auto;flex-direction:row}
   .shell.is-rail .side__nav{padding:14px 12px}
   .shell.is-rail .navlink{justify-content:flex-start;padding:8px 10px}
   .shell.is-rail .navgroup+.navgroup{margin-top:18px;border-top:0;padding-top:0}
   .shell.is-rail .side__foot{padding:12px}
   .shell.is-rail .side__foot .btn{padding:8px 14px}
-  .shell.is-rail .side__toggles{flex-direction:row}
+  .shell.is-rail .side__pair{flex-direction:row}
+  /* the sidebar is a drawer at this width, so there is nothing to collapse */
+  .side__brandbtns [data-chrome="rail"]{display:none}
 }

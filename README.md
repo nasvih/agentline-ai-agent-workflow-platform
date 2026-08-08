@@ -78,18 +78,21 @@ answers about run health, failures, escalations, cost, connections, guardrails, 
 single agent. The launcher steps aside on the Playground, which is a product screen with its own
 docked chat, so there is never more than one chat affordance on screen.
 
-The sidebar footer carries two shell controls, both remembered between visits: **Collapse** shrinks
-the navigation to a 64px icon rail, and the tone control switches the sidebar between the brand
-yellow and plain white. **Yellow is the default** — the button reads `White` while yellow is on,
-because the label says what the click does. Under it sit **Install app** (only when the browser
-offers it), **Reset demo data**, **About this demo**, a link out to nasvih.in and
-**Source on GitHub**.
+Two icon-only shell controls sit on the sidebar brand row, right of the app name, both remembered
+between visits. A panel with a chevron shrinks the navigation to a 64px icon rail
+(*Collapse sidebar* / *Expand sidebar*), and a circle half filled switches the sidebar between the
+brand yellow and plain white. **Yellow is the default.** The colour control names no colour: it is
+labelled *Sidebar colour* for screen readers and reports the tone through `aria-pressed`.
+
+The footer below holds **About this demo** across the top, then a link out to nasvih.in beside
+**Source on GitHub**, then **Reset demo data** — joined by **Install app** when the browser offers
+one — and finally **Keyboard shortcuts**.
 
 ## Install it
 
 Agentline is a progressive web app. Served over HTTP it registers a service worker that caches its
 own shell, so it opens and works with no connection, and any browser that supports installing will
-offer **Install app** in the sidebar footer — on iPhone and iPad use Share → Add to Home Screen.
+offer **Install app** beside **Reset demo data** — on iPhone and iPad use Share → Add to Home Screen.
 Installed, it runs in its own window with the brand yellow as the theme colour.
 
 Nothing about this changes where the data lives: still `localStorage`, still this device only.

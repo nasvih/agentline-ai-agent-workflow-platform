@@ -122,7 +122,7 @@ Cost is held in paise as an integer and rendered by `rupees()`. The demo token r
 
 | File | Responsibility |
 |---|---|
-| `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, rail and colour toggles, the install control, About and shortcut modals, reset, the global console agent, go-to key handling. |
+| `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, the brand-row rail and colour controls, the install control, About and shortcut modals, reset, the global console agent, go-to key handling. |
 | `lib/pwa.js` | Service worker registration and the **Install app** control (copied from the kit, unmodified). |
 | `sw.js` | Offline shell cache. Its `SHELL` array lists every file this app needs to boot. |
 | `src/data.js` | `seedState()` and every lookup helper (`agentById`, `toolById`, `guardById`, `workflowById`, `guardActive`, `estimateCost`, `rupees`, `newRunId`), plus `MODELS` and the status-to-pill maps. |
@@ -305,31 +305,46 @@ alone; a pill always carries the word.
 
 ## Shell controls
 
-Two sidebar-footer buttons, both `aria-pressed` and both persisted under `agentline.ui.v1`
-(separate from the workspace data, so **Reset demo data** does not undo them):
+Two buttons on the sidebar brand row, in `.side__brandbtns` right of the app name, both
+`aria-pressed` and both persisted under `agentline.ui.v1` (separate from the workspace data, so
+**Reset demo data** does not undo them). Both are icon-only — the kit clips their `<span>` and
+sizes them to 30×30 — so the glyph and the accessible name do all the work. They are created once
+and `applyUI()` is the only thing that writes to them, so what a screen reader is told cannot drift
+from what is on screen.
 
-- **Collapse / Expand** toggles `is-rail` on `.shell` — a 64px icon rail with labels, counts and
-  group headings hidden. Nav links pick up `title` and `aria-label` in rail mode. The nav icon is a
-  direct child of the link rather than being wrapped in a span, because rail mode hides every span
-  inside a `.navlink` and the glyph has to survive that.
-- **Yellow / White** toggles `data-tone="amber"` on `.side`. **Yellow is the default** — the
-  preference object starts `{ rail: false, amber: true }` and the stored object is spread over it,
-  so a browser with nothing saved renders the yellow navigation. The button label names the action,
-  not the state, so it reads `White` while yellow is on; `aria-pressed` carries the state. Ink text
-  on `#EAC81C` throughout — never white on yellow. The pressed toggle uses an ink *outline* rather
-  than an ink fill, so the link out to nasvih.in stays the only solid dark block in the footer.
+- **Collapse sidebar / Expand sidebar** toggles `is-rail` on `.shell` — a 64px icon rail with
+  labels, counts and group headings hidden. Its `title` and `aria-label` name the action and follow
+  the state, and the glyph is a panel whose chevron points at the edge the sidebar is about to move
+  to. Nav links pick up `title` and `aria-label` in rail mode. The nav icon is a direct child of the
+  link rather than being wrapped in a span, because rail mode hides every span inside a `.navlink`
+  and the glyph has to survive that.
+- **Sidebar colour** toggles `data-tone="amber"` on `.side`. It names no colour in the interface or
+  in the accessible name: the glyph, a circle half filled, carries that, and `aria-pressed` reports
+  whether the yellow tone is on. **Yellow is the default** — the preference object starts
+  `{ rail: false, amber: true }` and the stored object is spread over it, so a browser with nothing
+  saved renders the yellow navigation. Ink text on `#EAC81C` throughout — never white on yellow.
+  A pressed control uses an ink *outline* rather than an ink fill, so the link out to nasvih.in
+  stays the only solid dark block in the sidebar.
 
-Below them, `#sidefoot` holds the install control (see below), **Reset demo data**, **About this
-demo**, a dark `.side__site` link out to nasvih.in, **Source on GitHub** pointing at `REPO_URL`, and
-**Keyboard shortcuts**. Both links are built by the same `footLink()` helper, so both get
-`target="_blank"`, `rel="noopener noreferrer"` and an `aria-label` ending "opens in a new tab". Only
-nasvih.in carries `.side__site`; the repository link is an ordinary outline control, because one
-inverted element is the point of the inverted element. Everything in the footer is a `.btn`, so it
-collapses to its glyph in rail mode with the label kept in `title`/`aria-label`.
+In the rail `.shell.is-rail .side__brandbtns` stacks the pair into a column under the mark, so both
+stay reachable inside 64px.
+
+`#sidefoot` below holds, in order: **About this demo**, then a `.side__pair` with the dark
+`.side__site` link out to nasvih.in beside **Source on GitHub** pointing at `REPO_URL`, then a
+second `.side__pair` with the install control (see below) beside **Reset demo data**, then
+**Keyboard shortcuts**. A pair is a flex row whose children share the width and truncate their
+labels rather than overflow, and the kit stacks it back into a column in the rail. Both links are
+built by the same `footLink()` helper, so both get `target="_blank"`, `rel="noopener noreferrer"`
+and an `aria-label` ending "opens in a new tab". Only nasvih.in carries `.side__site`; the
+repository link is an ordinary outline control, because one inverted element is the point of the
+inverted element. Everything in the footer is a `.btn`, so it collapses to its glyph in rail mode
+with the label kept in `title`/`aria-label`.
 
 Under 900px the sidebar is a drawer, and `.shell.is-rail` would otherwise out-specify the
 responsive rule and claim a 64px grid column. `assets/agentline.css` overrides the rail inside the
-900px media query so the drawer keeps its full width and its labels regardless of the setting.
+900px media query — including the stacked brand row and the stacked footer pairs — so the drawer
+keeps its full width and its labels regardless of the setting, and it hides the collapse control
+there because a drawer has nothing to collapse.
 
 ## Installable app
 
@@ -344,13 +359,16 @@ Agentline is a progressive web app. Three pieces:
 `main.js` calls it once at boot and routes its messages through the app's toast:
 
 ```js
-const pwaSlot = h('div', { class: 'side__install' });
-initPWA({ mount: pwaSlot, appName: 'Agentline', onNote: (msg) => toast(msg) });
+const installRow = h('div', { class: 'side__pair' });
+const installBtn = initPWA({ mount: installRow, appName: 'Agentline', onNote: (msg) => toast(msg) });
 ```
 
-The control is mounted into its own element rather than straight into `#sidefoot` because
-`paintFoot()` clears the footer on every sidebar repaint; the wrapper is re-appended, so the button
-keeps the deferred prompt and its listeners.
+The control is mounted into the last footer row — the one it shares with **Reset demo data** —
+rather than straight into `#sidefoot`, because `paintFoot()` clears the footer on every sidebar
+repaint. That row is created once outside `paintFoot()` and re-appended, so the button keeps the
+deferred prompt and its listeners. `initPWA` appends, so `main.js` moves the returned control to
+the head of the row; while it is hidden `[hidden]{display:none!important}` takes it out of the flex
+row entirely and **Reset demo data** spans the row on its own.
 
 **When you add or rename a file, add it to `SHELL` in `sw.js` and bump `CACHE_VERSION` in the same
 file.** Otherwise the worker keeps serving the previous copy and the new file is missing offline.

@@ -58,9 +58,19 @@ const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); }
 /* where this application's source is published */
 const REPO_URL = 'https://github.com/nasvih/agentline-ai-agent-workflow-platform';
 
-/* four local glyphs, same inline-stroke style as the shared set */
-const ICON_RAIL = '<svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8.5 4v12"/></svg>';
+/* five local glyphs, same inline-stroke style as the shared set. The two
+   chrome controls on the brand row carry no visible text, so their glyphs have
+   to say what they do: a panel whose chevron points at the edge the sidebar is
+   about to move to, and a circle half filled for the colour. */
+const ICON_RAIL = {
+  collapse: '<svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8.5 4v12"/><path d="M13.6 8.1L11.6 10l2 1.9"/></svg>',
+  expand: '<svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8.5 4v12"/><path d="M11.6 8.1l2 1.9-2 1.9"/></svg>',
+};
 const ICON_TONE = '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor" stroke="none"/></svg>';
+/* the colour control names no colour anywhere — the glyph carries it, and
+   aria-pressed is what reports whether the yellow tone is on */
+const TONE_LABEL = 'Sidebar colour';
+const railLabel = (railed) => (railed ? 'Expand sidebar' : 'Collapse sidebar');
 const ICON_OUT = '<svg viewBox="0 0 20 20"><path d="M11.5 3.5H16v4.5"/><path d="M16 3.5L9.5 10"/><path d="M14 11.5V15a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 15V7.5A1.5 1.5 0 0 1 5 6h3.5"/></svg>';
 const ICON_CODE = '<svg viewBox="0 0 20 20"><path d="M7.1 5.8L2.9 10l4.2 4.2"/><path d="M12.9 5.8L17.1 10l-4.2 4.2"/><path d="M11.4 4.1L8.6 15.9"/></svg>';
 
@@ -86,18 +96,49 @@ function paintNav() {
   });
 }
 
+/* The two chrome controls sit on the brand row, right of the app name, and are
+   icon-only — the kit clips their span and sizes them to 30x30. They are built
+   once, since the brand row is not repainted. */
+const brandBtns = qs('#brandbtns');
+const railBtn = h('button', {
+  class: 'btn btn--sm', type: 'button', dataset: { chrome: 'rail' },
+  'aria-pressed': 'false', 'aria-controls': 'side',
+  title: railLabel(false), 'aria-label': railLabel(false),
+  html: `${ICON_RAIL.collapse}<span>${railLabel(false)}</span>`,
+  onclick: () => { ui.rail = !ui.rail; saveUI(); applyUI(); },
+});
+const toneBtn = h('button', {
+  class: 'btn btn--sm', type: 'button', dataset: { chrome: 'tone' },
+  'aria-pressed': 'false', 'aria-controls': 'side',
+  title: TONE_LABEL, 'aria-label': TONE_LABEL,
+  html: `${ICON_TONE}<span>${esc(TONE_LABEL)}</span>`,
+  onclick: () => { ui.amber = !ui.amber; saveUI(); applyUI(); },
+});
+brandBtns.append(railBtn, toneBtn);
+
 function applyUI() {
   shellEl.classList.toggle('is-rail', ui.rail);
   if (ui.amber) sideEl.setAttribute('data-tone', 'amber');
   else sideEl.removeAttribute('data-tone');
+  const label = railLabel(ui.rail);
+  railBtn.setAttribute('aria-pressed', String(ui.rail));
+  railBtn.setAttribute('aria-label', label);
+  railBtn.title = label;
+  railBtn.innerHTML = `${ui.rail ? ICON_RAIL.expand : ICON_RAIL.collapse}<span>${label}</span>`;
+  toneBtn.setAttribute('aria-pressed', String(ui.amber));
   paintNav();
   paintFoot();
 }
 
-/* ---------- installable app ---------- */
-const pwaSlot = h('div', { class: 'side__install' });
-initPWA({
-  mount: pwaSlot,
+/* ---------- installable app ----------
+   The install control shares the last footer row with "Reset demo data". That
+   row keeps its own element across repaints, so the prompt the control
+   captured and its listeners survive a sidebar redraw. initPWA appends, so the
+   control is moved to the head of the row; while it is hidden it leaves the
+   flex row entirely and Reset spans the row on its own. */
+const installRow = h('div', { class: 'side__pair' });
+const installBtn = initPWA({
+  mount: installRow,
   appName: 'Agentline',
   onNote: (msg) => toast(msg),
 });
@@ -119,31 +160,20 @@ function paintFoot() {
     html: `${glyph}<span>${esc(label)}</span>`,
   });
 
-  const railLabel = ui.rail ? 'Expand sidebar' : 'Collapse sidebar to icons';
-  const toneLabel = ui.amber ? 'Use the white sidebar' : 'Use the yellow sidebar';
-
-  /* short visible labels so the pair fits side by side in a 248px sidebar —
-     the full sentence lives in title and aria-label */
-  foot.appendChild(h('div', { class: 'side__toggles' },
-    footBtn(ui.rail ? 'Expand' : 'Collapse', ICON_RAIL, () => { ui.rail = !ui.rail; saveUI(); applyUI(); },
-      { 'aria-pressed': String(ui.rail), title: railLabel, 'aria-label': railLabel }),
-    footBtn(ui.amber ? 'White' : 'Yellow', ICON_TONE, () => { ui.amber = !ui.amber; saveUI(); applyUI(); },
-      { 'aria-pressed': String(ui.amber), title: toneLabel, 'aria-label': toneLabel })));
-
-  /* The install control keeps its own element across repaints so the prompt
-     it captured and its listeners survive a sidebar redraw. */
-  foot.appendChild(pwaSlot);
-
-  foot.appendChild(footBtn('Reset demo data', icon('refresh'), resetDemo));
   foot.appendChild(footBtn('About this demo', icon('alert'), showAbout));
 
-  /* the only dark element in the sidebar, so it reads as a link out of the
-     product whichever tone the navigation is set to */
-  foot.appendChild(footLink('nasvih.in', ICON_OUT, 'https://www.nasvih.in', 'side__site'));
+  /* nasvih.in is the only dark element in the sidebar, so it reads as a link
+     out of the product whichever tone the navigation is set to. The repository
+     shares its row as an ordinary outline control — one inverted element in
+     the footer is the point of the inverted element. */
+  foot.appendChild(h('div', { class: 'side__pair' },
+    footLink('nasvih.in', ICON_OUT, 'https://www.nasvih.in', 'side__site'),
+    footLink('Source on GitHub', ICON_CODE, REPO_URL)));
 
-  /* the repository sits next to it as an ordinary outline control — one
-     inverted element in the footer is the point of the inverted element */
-  foot.appendChild(footLink('Source on GitHub', ICON_CODE, REPO_URL));
+  /* built outside this function so the install control survives the repaint */
+  installRow.replaceChildren(footBtn('Reset demo data', icon('refresh'), resetDemo));
+  if (installBtn) installRow.insertBefore(installBtn, installRow.firstChild);
+  foot.appendChild(installRow);
 
   foot.appendChild(footBtn('Keyboard shortcuts', icon('key'), showShortcuts));
   foot.appendChild(h('div', { class: 'side__ver' }, 'demo build · local data only'));
