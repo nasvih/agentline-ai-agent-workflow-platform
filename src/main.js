@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { h, qs, esc, icon, createStore, router, toast, confirmDialog, modal } from '../lib/ui.js';
+import { initPWA } from '../lib/pwa.js';
 import { STORE_KEY, seedState } from './data.js';
 import { buildConsoleBot } from './agent.js';
 import { selfTest } from './selftest.js';
@@ -46,15 +47,18 @@ const shellEl = qs('#shell');
 const scrimEl = qs('#sidescrim');
 let current = 'agents';
 
-/* ---------- sidebar preferences (rail + colour), persisted ---------- */
+/* ---------- sidebar preferences (rail + colour), persisted ----------
+   Brand yellow is the default navigation. Plain white is the alternative,
+   kept one click away in the sidebar footer and remembered per browser. */
 const UI_KEY = 'agentline.ui.v1';
 const readUI = () => { try { return JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (_) { return {}; } };
-const ui = { rail: false, amber: false, ...readUI() };
+const ui = { rail: false, amber: true, ...readUI() };
 const saveUI = () => { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (_) {} };
 
-/* two local glyphs, same inline-stroke style as the shared set */
+/* three local glyphs, same inline-stroke style as the shared set */
 const ICON_RAIL = '<svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M8.5 4v12"/></svg>';
 const ICON_TONE = '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor" stroke="none"/></svg>';
+const ICON_OUT = '<svg viewBox="0 0 20 20"><path d="M11.5 3.5H16v4.5"/><path d="M16 3.5L9.5 10"/><path d="M14 11.5V15a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 15V7.5A1.5 1.5 0 0 1 5 6h3.5"/></svg>';
 
 function paintNav() {
   const s = store.state;
@@ -86,6 +90,14 @@ function applyUI() {
   paintFoot();
 }
 
+/* ---------- installable app ---------- */
+const pwaSlot = h('div', { class: 'side__install' });
+initPWA({
+  mount: pwaSlot,
+  appName: 'Agentline',
+  onNote: (msg) => toast(msg),
+});
+
 function paintFoot() {
   const foot = qs('#sidefoot');
   foot.innerHTML = '';
@@ -106,8 +118,26 @@ function paintFoot() {
     footBtn(ui.amber ? 'White' : 'Yellow', ICON_TONE, () => { ui.amber = !ui.amber; saveUI(); applyUI(); },
       { 'aria-pressed': String(ui.amber), title: toneLabel, 'aria-label': toneLabel })));
 
+  /* The install control keeps its own element across repaints so the prompt
+     it captured and its listeners survive a sidebar redraw. */
+  foot.appendChild(pwaSlot);
+
   foot.appendChild(footBtn('Reset demo data', icon('refresh'), resetDemo));
   foot.appendChild(footBtn('About this demo', icon('alert'), showAbout));
+
+  /* the only dark element in the sidebar, so it reads as a link out of the
+     product whichever tone the navigation is set to */
+  const siteLabel = 'nasvih.in — opens in a new tab';
+  foot.appendChild(h('a', {
+    class: 'btn btn--block btn--sm side__site',
+    href: 'https://www.nasvih.in',
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    title: siteLabel,
+    'aria-label': siteLabel,
+    html: `${ICON_OUT}<span>nasvih.in</span>`,
+  }));
+
   foot.appendChild(footBtn('Keyboard shortcuts', icon('key'), showShortcuts));
   foot.appendChild(h('div', { class: 'side__ver' }, 'demo build · local data only'));
 }
@@ -129,16 +159,28 @@ function showAbout() {
     width: '560px',
     body: `
       <section class="aboutblock">
-        <h4>You can actually use it</h4>
-        <p>Build workflows, add and remove steps, run them, toggle tools and guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.</p>
+        <h4>What this is</h4>
+        <p>Agentline is a workspace for putting agents to work. You define an agent, give it the tools it is allowed to use and the guardrails it has to obey, then run it on its own or as a step inside a workflow. Every run is written down as a trace you can open afterwards and read line by line.</p>
       </section>
       <section class="aboutblock">
-        <h4>Your data stays on your machine</h4>
-        <p>Everything you enter is saved in this browser's local storage. Nothing is sent to a server, there is no account and no backend. Clear your browser data, or use <strong>Reset demo data</strong>, and it is all gone. It does not sync between browsers or devices.</p>
+        <h4>Where it helps a business</h4>
+        <ul class="aboutlist">
+          <li>Repetitive desk work — triaging a ticket queue, reading invoices, drafting the weekly report — gets a first pass before anyone opens it.</li>
+          <li>Every run leaves a trace, so an answer can be explained: which tool was called, on what, and what came back.</li>
+          <li>Guardrails are configuration, not code. Redaction, allowed topics, escalation to a human and a cost ceiling are set by whoever owns the process.</li>
+          <li>Connections are explicit. An agent cannot touch a system nobody granted it.</li>
+          <li>When something goes wrong, the run history shows which step failed and why, instead of one blank error.</li>
+        </ul>
       </section>
       <section class="aboutblock">
-        <h4>The agents are simulated</h4>
-        <p>Every reply, tool call, token count and latency figure is generated locally from this app's demo data to show how the product behaves. No AI model is connected and no request leaves your browser. What this demonstrates is the interface, the traces and the guardrail behaviour — not model quality.</p>
+        <h4>How it would work for real</h4>
+        <p>The same interface, with a real model provider behind the agents, real connections to the systems named on <strong>Tools</strong>, and the run history in a database rather than this browser. This demo simulates only that model layer, so the product itself can be judged: the interface, the traces, the guardrail behaviour and the shape of a workflow are real design decisions. The answers are not model output.</p>
+      </section>
+      <section class="aboutblock">
+        <h4>How this demo works</h4>
+        <p><strong>You can actually use it.</strong> Build workflows, add and remove steps, run them, toggle tools and guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.</p>
+        <p><strong>Your data stays on your machine.</strong> Everything you enter is saved in this browser's local storage. There is no account and no backend. Clear your browser data, or use <strong>Reset demo data</strong>, and it is all gone.</p>
+        <p><strong>The agents are simulated.</strong> Every reply, tool call, token count and latency figure is generated locally from this app's demo data. No model is connected and no request leaves your browser.</p>
       </section>`,
     actions: [{ label: 'Got it', class: 'btn--primary' }],
   });

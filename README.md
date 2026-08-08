@@ -14,21 +14,44 @@ Part of a suite of six standalone demo applications.
 
 ---
 
+## What this is
+
+Agentline is a workspace for putting agents to work. You define an agent, give it the tools it is
+allowed to use and the guardrails it has to obey, then run it on its own or as a step inside a
+workflow. Every run is written down as a trace you can open afterwards and read line by line.
+
+## Where it helps a business
+
+- Repetitive desk work — triaging a ticket queue, reading invoices, drafting the weekly report —
+  gets a first pass before anyone opens it.
+- Every run leaves a trace, so an answer can be explained: which tool was called, on what, and what
+  came back.
+- Guardrails are configuration, not code. Redaction, allowed topics, escalation to a human and a
+  cost ceiling are set by whoever owns the process.
+- Connections are explicit. An agent cannot touch a system nobody granted it.
+- When something goes wrong, the run history shows which step failed and why, instead of one blank
+  error.
+
+## How it would work for real
+
+The same interface, with a real model provider behind the agents, real connections to the systems
+named on **Tools**, and the run history in a database rather than this browser. This demo simulates
+only that model layer, so the product itself can be judged: the interface, the traces, the guardrail
+behaviour and the shape of a workflow are real design decisions. The answers are not model output.
+
 ## How this demo works
 
 **You can actually use it.** Build workflows, add and remove steps, run them, toggle tools and
 guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.
 
 **Your data stays on your machine.** Everything you enter is saved in this browser's local storage.
-Nothing is sent to a server, there is no account and no backend. Clear your browser data, or use
-**Reset demo data**, and it is all gone. It does not sync between browsers or devices.
+There is no account and no backend. Clear your browser data, or use **Reset demo data**, and it is
+all gone. It does not sync between browsers or devices.
 
 **The agents are simulated.** Every reply, tool call, token count and latency figure is generated
-locally from this app's demo data to show how the product behaves. No AI model is connected and no
-request leaves your browser. What this demonstrates is the interface, the traces and the guardrail
-behaviour — not model quality.
+locally from this app's demo data. No model is connected and no request leaves your browser.
 
-The same three points are in the app, behind the **Demo** pill in the top bar and the
+The same four blocks are in the app, behind the **Demo** pill in the top bar and the
 **About this demo** item in the sidebar footer.
 
 ---
@@ -52,7 +75,28 @@ single agent. The launcher steps aside on the Playground, which is a product scr
 docked chat, so there is never more than one chat affordance on screen.
 
 The sidebar footer carries two shell controls, both remembered between visits: **Collapse** shrinks
-the navigation to a 64px icon rail, and **Yellow** switches the sidebar to the brand colour.
+the navigation to a 64px icon rail, and the tone control switches the sidebar between the brand
+yellow and plain white. **Yellow is the default** — the button reads `White` while yellow is on,
+because the label says what the click does. Under it sit **Install app** (only when the browser
+offers it), **Reset demo data**, **About this demo** and a link out to nasvih.in.
+
+## Install it
+
+Agentline is a progressive web app. Served over HTTP it registers a service worker that caches its
+own shell, so it opens and works with no connection, and any browser that supports installing will
+offer **Install app** in the sidebar footer — on iPhone and iPad use Share → Add to Home Screen.
+Installed, it runs in its own window with the brand yellow as the theme colour.
+
+Nothing about this changes where the data lives: still `localStorage`, still this device only.
+
+| File | Role |
+|---|---|
+| `manifest.webmanifest` | Name, icons, `standalone` display, `#EAC81C` theme colour, `./` scope |
+| `sw.js` | Cache-first service worker over an explicit list of this app's files |
+| `lib/pwa.js` | Registers the worker and drives the install control |
+
+When you add or rename a file in the app, add it to the `SHELL` array in `sw.js` and bump
+`CACHE_VERSION` in the same file, or the old copy keeps being served.
 
 ## Run it
 
@@ -92,10 +136,14 @@ relative, so it works from a project subdirectory without changes.
 ```
 agentline/
   index.html              single page, hash routed
+  manifest.webmanifest    installable app metadata
+  sw.js                   service worker: offline shell cache
   assets/app.css          shared design system (copied, unmodified)
   assets/agentline.css    components used only by this app
+  assets/icons/           192, 512 and maskable app icons
   lib/ui.js               DOM, router, store, formatting, icons (copied)
   lib/assistant.js        assistant engine (copied)
+  lib/pwa.js              service worker registration + install control (copied)
   src/main.js             boot: store, nav, router, shell, console agent
   src/data.js             seeded demo dataset and helpers
   src/agent.js            intent packs and the guardrail engine
@@ -114,11 +162,13 @@ agentline/
 
 - All records are generated from a fixed seed, so the numbers are the same on every reload until
   you change something. Companies, people and figures are invented.
-- State is written to one `localStorage` key, `agentline.demo.v1`.
+- State is written to one `localStorage` key, `agentline.demo.v1`. Sidebar preferences live in a
+  second key, `agentline.ui.v1`, which **Reset demo data** deliberately leaves alone.
 - Run history is capped at 90 entries.
 - Currency is `₹`. Costs are shown in rupees at a made-up token rate.
 - The only request the page makes to another origin is the font stylesheet in the document head.
-  There is no `fetch` anywhere in the source.
+  The app code contains no `fetch` at all; the only `fetch` in the repository is inside `sw.js`,
+  which re-requests this app's own files to fill the offline cache.
 
 ## Licence
 

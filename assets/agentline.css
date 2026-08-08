@@ -169,6 +169,10 @@
 }
 @media (max-width:640px){
   .pg__chat{height:calc(100vh - 260px);min-height:380px}
+  /* the shared sheet turns the floating panel full-screen at this width; the
+     docked one is a page element, so it keeps the width of its column instead
+     of running 100vw past the view padding */
+  .pg__chat .assist{position:static;width:auto;height:100%;border-radius:var(--r-lg)}
   .agentcard__stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
   .node{flex-wrap:wrap}
   .node__acts{width:100%;justify-content:flex-end}
@@ -193,6 +197,10 @@
 .aboutblock+.aboutblock{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
 .aboutblock h4{font-size:13.5px;margin-bottom:5px}
 .aboutblock p{font-size:13px;color:var(--muted)}
+.aboutblock p+p{margin-top:8px}
+.aboutlist{margin:0;padding-left:17px;font-size:13px;color:var(--muted)}
+.aboutlist li{margin-top:5px}
+.aboutlist li::marker{color:var(--amber-deep)}
 .simnote{font-size:12px;color:var(--muted);background:var(--amber-soft);border:1px solid var(--amber-line);
   border-radius:var(--r-sm);padding:8px 11px;line-height:1.5}
 .rail .simnote{border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--amber-soft)}
@@ -207,9 +215,25 @@ body.is-playground .assist-fab{display:none}
 .shell.is-rail .side__ver{display:none}
 .shell.is-rail .side__brand{gap:0}
 .side[data-tone="amber"] .side__ver{color:var(--amber-darker)}
-.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--amber-fill)}
+/* pressed toggle on the yellow sidebar: an ink outline, not an ink fill —
+   the link out to nasvih.in is the only solid dark block down here */
+.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]{background:rgba(23,24,26,.10);border-color:rgba(23,24,26,.5);color:var(--ink)}
+.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]:hover{background:rgba(23,24,26,.16)}
 .side__toggles .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
 .side__toggles .btn{min-width:0;overflow:hidden;padding-left:8px;padding-right:8px}
+
+/* the install control keeps its own wrapper so it survives a footer repaint;
+   it is hidden until the browser says installing is possible, so the spacing
+   sits on the button and disappears with it */
+.side__install .btn{margin-top:8px}
+.side__foot>.side__install+.btn{margin-top:8px}
+
+/* link out to the author's site: the one dark element in the sidebar, so it
+   reads the same against the yellow default and the white alternative */
+.side__site{background:var(--night);border-color:var(--night);color:#fff;text-decoration:none}
+.side__site:hover{background:var(--night-2);border-color:var(--night-2);color:#fff}
+.side[data-tone="amber"] .side__site{background:var(--night);border-color:var(--night);color:#fff}
+.side[data-tone="amber"] .side__site:hover{background:var(--night-2);border-color:var(--night-2)}
 
 /* Under 900px the sidebar is a drawer, so the rail must not claim a grid
    column or strip the labels the drawer needs. Overrides the shared rules. */

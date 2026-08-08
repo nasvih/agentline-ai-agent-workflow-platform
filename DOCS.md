@@ -1,29 +1,62 @@
 # Agentline — technical notes
 
+## What this is
+
+Agentline is a workspace for putting agents to work. You define an agent, give it the tools it is
+allowed to use and the guardrails it has to obey, then run it on its own or as a step inside a
+workflow. Every run is written down as a trace you can open afterwards and read line by line.
+
+## Where it helps a business
+
+- Repetitive desk work — triaging a ticket queue, reading invoices, drafting the weekly report —
+  gets a first pass before anyone opens it.
+- Every run leaves a trace, so an answer can be explained: which tool was called, on what, and what
+  came back.
+- Guardrails are configuration, not code. Redaction, allowed topics, escalation to a human and a
+  cost ceiling are set by whoever owns the process.
+- Connections are explicit. An agent cannot touch a system nobody granted it.
+- When something goes wrong, the run history shows which step failed and why, instead of one blank
+  error.
+
+## How it would work for real
+
+The same interface, with a real model provider behind the agents, real connections to the systems
+named on **Tools**, and the run history in a database rather than this browser. This demo simulates
+only that model layer, so the product itself can be judged: the interface, the traces, the guardrail
+behaviour and the shape of a workflow are real design decisions. The answers are not model output.
+
+The seam is narrow on purpose. `wrapIntent` in `src/agent.js` is where a real completion call would
+go, `planRun` in `src/views/workflows.js` is where a real orchestrator would go, and the run records
+written into `state.runs` are already shaped like rows in a traces table.
+
 ## How this demo works
 
 **You can actually use it.** Build workflows, add and remove steps, run them, toggle tools and
 guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.
 
 **Your data stays on your machine.** Everything you enter is saved in this browser's local storage.
-Nothing is sent to a server, there is no account and no backend. Clear your browser data, or use
-**Reset demo data**, and it is all gone. It does not sync between browsers or devices.
+There is no account and no backend. Clear your browser data, or use **Reset demo data**, and it is
+all gone. It does not sync between browsers or devices.
 
 **The agents are simulated.** Every reply, tool call, token count and latency figure is generated
-locally from this app's demo data to show how the product behaves. No AI model is connected and no
-request leaves your browser. What this demonstrates is the interface, the traces and the guardrail
-behaviour — not model quality.
+locally from this app's demo data. No model is connected and no request leaves your browser.
+
+The same four blocks are the body of the **About this demo** modal in `src/main.js`.
 
 ---
 
 ## Architecture
 
-Plain ES modules loaded straight from the page. No bundler, no framework, no dependencies, no build
-step, and no `fetch` call anywhere in the source.
+Plain ES modules loaded straight from the page. No bundler, no framework, no dependencies and no
+build step. The application code contains no `fetch` call at all — the only one in the repository is
+in `sw.js`, which re-requests this app's own files to fill the offline cache.
 
 ```
 index.html
+   ├── manifest.webmanifest         installable app metadata
    └── src/main.js                  store · nav · router · shell · console agent
+          ├── lib/pwa.js            service worker registration + install control
+          │      └── sw.js          offline shell cache (registered at the app root)
           ├── src/data.js           seed + lookups (imported by everything)
           ├── src/agent.js          intent packs + guardrail engine
           ├── src/selftest.js       suggestion routing check
@@ -88,7 +121,9 @@ Cost is held in paise as an integer and rendered by `rupees()`. The demo token r
 
 | File | Responsibility |
 |---|---|
-| `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, rail and colour toggles, About and shortcut modals, reset, the global console agent, go-to key handling. |
+| `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, rail and colour toggles, the install control, About and shortcut modals, reset, the global console agent, go-to key handling. |
+| `lib/pwa.js` | Service worker registration and the **Install app** control (copied from the kit, unmodified). |
+| `sw.js` | Offline shell cache. Its `SHELL` array lists every file this app needs to boot. |
 | `src/data.js` | `seedState()` and every lookup helper (`agentById`, `toolById`, `guardById`, `workflowById`, `guardActive`, `estimateCost`, `rupees`, `newRunId`), plus `MODELS` and the status-to-pill maps. |
 | `src/agent.js` | `wrapIntent` (the guardrail engine), the four packs, the shared intents, `packFor`, `buildAgentBot`, `buildConsoleBot`, `redactText`, `CONSOLE_SUGGESTIONS`, `AGENT_SUGGESTIONS`, `GUARDRAIL_PROBES`. |
 | `src/selftest.js` | Routes every suggestion chip and guardrail probe through `Assistant._route` and asserts none reaches the fallback. |
@@ -276,12 +311,45 @@ Two sidebar-footer buttons, both `aria-pressed` and both persisted under `agentl
   group headings hidden. Nav links pick up `title` and `aria-label` in rail mode. The nav icon is a
   direct child of the link rather than being wrapped in a span, because rail mode hides every span
   inside a `.navlink` and the glyph has to survive that.
-- **Yellow / White** toggles `data-tone="amber"` on `.side`. Ink text on `#EAC81C` throughout —
-  never white on yellow.
+- **Yellow / White** toggles `data-tone="amber"` on `.side`. **Yellow is the default** — the
+  preference object starts `{ rail: false, amber: true }` and the stored object is spread over it,
+  so a browser with nothing saved renders the yellow navigation. The button label names the action,
+  not the state, so it reads `White` while yellow is on; `aria-pressed` carries the state. Ink text
+  on `#EAC81C` throughout — never white on yellow. The pressed toggle uses an ink *outline* rather
+  than an ink fill, so the link out to nasvih.in stays the only solid dark block in the footer.
+
+Below them, `#sidefoot` holds the install control (see below), **Reset demo data**, **About this
+demo**, a dark `.side__site` link out to nasvih.in (`target="_blank"`, `rel="noopener noreferrer"`,
+`aria-label` saying it opens in a new tab) and **Keyboard shortcuts**. Everything in the footer is a
+`.btn`, so it collapses to its glyph in rail mode with the label kept in `title`/`aria-label`.
 
 Under 900px the sidebar is a drawer, and `.shell.is-rail` would otherwise out-specify the
 responsive rule and claim a 64px grid column. `assets/agentline.css` overrides the rail inside the
 900px media query so the drawer keeps its full width and its labels regardless of the setting.
+
+## Installable app
+
+Agentline is a progressive web app. Three pieces:
+
+| File | Role |
+|---|---|
+| `manifest.webmanifest` | `Agentline`, `start_url` and `scope` both `./` so it works from a GitHub Pages subdirectory, `display: standalone`, `background_color: #FFFFFF`, `theme_color: #EAC81C`, three icons (192 any, 512 any, 512 maskable), `lang: en`. |
+| `sw.js` | Registered at the app root so its scope covers the whole app. `install` pre-caches an explicit `SHELL` array — every HTML, CSS, JS module, the manifest and the icons — into one versioned cache; `activate` deletes any older cache under the same scope; `fetch` is cache-first for same-origin, shell-fallback for navigations, network-first for the font stylesheet. |
+| `lib/pwa.js` | Copied from the kit. Registers the worker, captures `beforeinstallprompt`, and renders the **Install app** control, hidden until the browser says installing is possible. iOS has no prompt event, so there the control explains Share → Add to Home Screen. |
+
+`main.js` calls it once at boot and routes its messages through the app's toast:
+
+```js
+const pwaSlot = h('div', { class: 'side__install' });
+initPWA({ mount: pwaSlot, appName: 'Agentline', onNote: (msg) => toast(msg) });
+```
+
+The control is mounted into its own element rather than straight into `#sidefoot` because
+`paintFoot()` clears the footer on every sidebar repaint; the wrapper is re-appended, so the button
+keeps the deferred prompt and its listeners.
+
+**When you add or rename a file, add it to `SHELL` in `sw.js` and bump `CACHE_VERSION` in the same
+file.** Otherwise the worker keeps serving the previous copy and the new file is missing offline.
 
 ### One chat affordance at a time
 
