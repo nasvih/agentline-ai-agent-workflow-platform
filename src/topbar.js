@@ -293,7 +293,7 @@ function theme({ prefs, savePrefs }) {
     'aria-label': 'Dark mode', title: 'Dark mode', 'aria-pressed': 'false', html: G.moon,
   });
 
-  const current = () => (prefs.theme === 'dark' || prefs.theme === 'light' ? prefs.theme : (media.matches ? 'dark' : 'light'));
+  const current = () => (prefs.theme === 'dark' ? 'dark' : 'light');
 
   function apply() {
     const t = current();

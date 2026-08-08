@@ -23,7 +23,7 @@
 try {
   var p = JSON.parse(localStorage.getItem('agentline.ui.v1') || '{}');
   var t = (p.theme === 'dark' || p.theme === 'light') ? p.theme
-    : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    : ('light');
   document.documentElement.setAttribute('data-theme', t);
 } catch (e) { /* private mode, first visit — the module sets it later */ }
 </script>
