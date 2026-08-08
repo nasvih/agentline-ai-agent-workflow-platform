@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentline — build, run and supervise agent workflows</title>
+<meta name="description" content="Agentline is a demo workspace for building agents, wiring them into workflows, watching every run and holding them to guardrails. All data is local sample data.">
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./assets/app.css">
+<link rel="stylesheet" href="./assets/agentline.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23EAC81C'/%3E%3Cpath d='M11 22l5-12 5 12M13 18h6' stroke='%2317181A' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<noscript>
+  <div style="padding:24px;font-family:system-ui">Agentline is a JavaScript application. Enable JavaScript to load the demo workspace — there is no server side and no data leaves this page.</div>
+</noscript>
+
+<div class="shell">
+  <aside class="side" id="side" aria-label="Primary">
+    <div class="side__brand">
+      <span class="mark" aria-hidden="true">AL</span>
+      <div>
+        <div class="side__name">Agentline</div>
+        <div class="side__tag">Agent workflows</div>
+      </div>
+    </div>
+    <nav class="side__nav" id="nav" aria-label="Sections"></nav>
+    <div class="side__foot" id="sidefoot"></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="btn btn--ghost btn--icon sidebtn" id="menubtn" aria-label="Open navigation" aria-expanded="false"></button>
+      <div>
+        <div class="topbar__title" id="crumb">Agents</div>
+        <div class="topbar__sub" id="crumbsub">workspace</div>
+      </div>
+      <span class="spacer"></span>
+      <button class="pill pill--amber pill--btn" id="demopill" type="button" title="About this demo — what is real, where your data lives, and why the agents are simulated.">Demo</button>
+      <button class="btn btn--sm" id="resetbtn">Reset demo data</button>
+    </header>
+    <main class="view view--pad" id="view" tabindex="-1"></main>
+    <footer class="appfoot">
+      <span>Agentline — demo build. Replies are produced by local pattern matching over the sample data in this page. No model, no network, no accounts.</span>
+      <span class="mono">Muhammed Nasvih V · nasvih.in</span>
+    </footer>
+  </div>
+</div>
+
+<div class="side-scrim" id="sidescrim" hidden></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
