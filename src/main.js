@@ -5,6 +5,7 @@
 import { h, qs, icon, createStore, router, toast, confirmDialog, modal } from '../lib/ui.js';
 import { STORE_KEY, seedState } from './data.js';
 import { buildConsoleBot } from './agent.js';
+import { selfTest } from './selftest.js';
 
 import * as viewAgents from './views/agents.js';
 import * as viewPlayground from './views/playground.js';
@@ -215,3 +216,10 @@ document.addEventListener('keydown', (e) => {
 /* ---------- go ---------- */
 paintFoot();
 nav.go();
+
+/* Handle for the suggestion routing self-test:  await agentline.selfTest()
+   Read only — it routes questions without composing answers or writing runs. */
+window.agentline = {
+  store,
+  selfTest: (opts) => selfTest(store, opts),
+};

@@ -91,7 +91,6 @@ function wrapIntent(intent, agent, store, emit) {
           status = 'blocked';
           out = {
             text: `I can't take that one. **Allowed topics** is on for this agent and "${hit}" is outside the approved list.\n\nThe list is currently: ${gTopics.topics.join(', ')}. Ask me anything inside it and I will pull the live records.\n\nIf you want to see what I would have said, switch the rule off in **Guardrails**.`,
-            suggestions: intent.suggestions || [],
           };
         } else {
           ev('Guardrail: allowed topics', 'guardrail', 'ok', jitter(2, 8), 'question is on-topic');
@@ -113,7 +112,6 @@ function wrapIntent(intent, agent, store, emit) {
           status = 'escalated';
           out = {
             text: `I'm handing this to a person. The word **"${trigger}"** matches an escalation trigger, so I stop rather than answer.\n\n- Queue: ${gEsc.queue}\n- Reference: \`${ref}\`\n- Handover note: the full question, the agent used (${agent.name}) and the records I had already opened.\n\nTurn **Escalation to human** off in Guardrails if you want me to attempt it myself.`,
-            suggestions: intent.suggestions || [],
           };
         } else if (trigger) {
           escalatedNote = '\n\n_Escalation to human is switched off, so I answered this myself instead of passing it to the desk._';
@@ -134,8 +132,7 @@ function wrapIntent(intent, agent, store, emit) {
             status = 'failed';
             out = {
               text: `I need the **${tool.name}** connection for that and it is disconnected right now.\n\n${tool.description}\n\nTurn it back on in **Tools & connections** and ask me again. Without it I can still answer anything that only needs ${agent.tools.filter((x) => x !== tid).map((x) => (toolById(s, x) || {}).name).filter(Boolean).join(' or ') || 'my own run history'}.`,
-              suggestions: intent.suggestions || [],
-            };
+              };
             break;
           }
           toolCalls++;
@@ -802,6 +799,13 @@ export const AGENT_SUGGESTIONS = {
   report: ['Write the weekly summary', 'Compare against last week', 'What moved this week?', 'Where does the data come from?'],
 };
 
+export const CONSOLE_SUGGESTIONS = [
+  'How is the workspace doing?',
+  'What failed?',
+  'Where is the cost going?',
+  'Which connections are down?',
+];
+
 export const GUARDRAIL_PROBES = [
   { label: 'Off-topic question', q: 'what are the salary bands here?' },
   { label: 'Escalation trigger', q: 'the customer is angry and wants a refund' },
@@ -823,10 +827,37 @@ function offTopicIntent(store) {
       return words.length ? [new RegExp(`(${words.map(reEsc).join('|')})`, 'i')] : [];
     },
     trace: 'checked the question against the topic list',
-    answer: (q, { state }) => {
+    answer: (q, { state, agent }) => {
       const g = guardById(state, 'topics');
+      const bound = agent.guardrails.includes('topics');
+      const why = bound
+        ? '**Allowed topics** is switched off for the workspace, so I am not refusing you'
+        : '**Allowed topics** is not bound to this agent, so nothing refused you';
       return {
-        text: `I have no records on that. **Allowed topics** is switched off, so I am not refusing you — I simply hold nothing that answers it.\n\nWhat I do hold sits under: ${g.topics.join(', ')}.`,
+        text: `I have no records on that. ${why} — I simply hold nothing that answers it.\n\nWhat I do hold sits under: ${g.topics.join(', ')}.\n\n${bound ? 'Switch the rule back on in Guardrails' : 'Bind the rule to this agent in the agent editor'} to see the refusal instead of this.`,
+      };
+    },
+  };
+}
+
+/* Same reasoning as the off-topic catcher: an escalation trigger must
+   always land somewhere, including on agents the rule is not bound to. */
+function handoverIntent(store) {
+  return {
+    id: 'handover',
+    get match() {
+      const g = guardById(store.state, 'escalate');
+      const words = (g && g.triggers) || [];
+      return words.length ? [new RegExp(`(${words.map(reEsc).join('|')})`, 'i')] : [];
+    },
+    trace: 'checked the escalation rule',
+    answer: (q, { state, agent }) => {
+      const g = guardById(state, 'escalate');
+      const bound = agent.guardrails.includes('escalate');
+      return {
+        text: `That reads like a handover. Here is the context a person would need:\n\n- Agent: ${agent.name} on \`${agent.model}\`\n- Queue configured on the rule: ${g.queue}\n- Trigger words: ${g.triggers.join(', ')}\n\n${bound
+          ? '**Escalation to human** is bound to me but switched off, so nothing was raised.'
+          : '**Escalation to human** is not bound to this agent, so nothing was raised.'} ${bound ? 'Switch it on in Guardrails' : 'Bind it to this agent in the agent editor'} and ask again to watch the handover happen.`,
       };
     },
   };
@@ -835,16 +866,24 @@ function offTopicIntent(store) {
 export function packFor(agent, store) {
   const build = PACK_BUILDERS[agent.id] || genericPack;
   const pack = [...build(), ...sharedIntents(agent)];
-  if (store && agent.guardrails.includes('topics')) pack.push(offTopicIntent(store));
+  /* Catchers go last so a real intent always outscores them. They exist so
+     that no suggestion chip or guardrail probe can ever reach the fallback. */
+  if (store) pack.push(offTopicIntent(store), handoverIntent(store));
   return pack;
 }
 
 /* ============================================================
    Assistant factories
    ============================================================ */
+export const DEFAULT_AGENT_SUGGESTIONS = [
+  'What can you do?', 'What tools do you have?', 'What guardrails apply?', 'How many runs have you done?',
+];
+
+export const suggestionsFor = (agent) => AGENT_SUGGESTIONS[agent.id] || DEFAULT_AGENT_SUGGESTIONS;
+
 export function buildAgentBot(store, agent, { emit } = {}) {
   const intents = packFor(agent, store).map((i) => wrapIntent(i, agent, store, emit));
-  const suggestions = AGENT_SUGGESTIONS[agent.id] || ['What can you do?', 'What tools do you have?', 'What guardrails apply?', 'How many runs have you done?'];
+  const suggestions = suggestionsFor(agent);
   return new Assistant({
     name: agent.name,
     initials: agent.initials,
@@ -853,10 +892,10 @@ export function buildAgentBot(store, agent, { emit } = {}) {
     suggestions,
     intents,
     fallbacks: [
-      `I did not match that to anything I can do. ${agent.purpose}`,
-      'No intent matched. Try one of the chips below — those are the shapes I understand.',
-      'That one is outside my pack. Ask about my tools, my guardrails or the records I read.',
-      'I could not place that question. Every answer I give comes from the demo records, so keep it to those.',
+      `I did not match that to anything in my pack. Try "${suggestions[0]}" or "${suggestions[1]}".`,
+      `No intent matched. I can answer "${suggestions[2]}" and "${suggestions[3]}", or anything about my tools, my guardrails and my run history.`,
+      `That is outside my pack. ${agent.purpose} Start with "${suggestions[0]}".`,
+      `I could not place that. Every answer I give comes from this workspace's records — try "${suggestions[1]}".`,
     ],
     note: 'Demo agent — replies are matched locally against sample data. No model, no network.',
     context: () => ({ state: store.state, agent }),
@@ -868,7 +907,12 @@ export function buildConsoleBot(store) {
   const S = () => store.state;
   const intents = [
     {
-      id: 'health', match: [/health|how (is|are) (things|it going)|overview|status|dashboard/i],
+      id: 'health',
+      match: [
+        /how (is|are|'s) .*(doing|going|looking)|how are we|health|overview|dashboard|summar(y|ise)/i,
+        /(workspace|things|everything|it all) (doing|going|ok|okay|alright)/i,
+        'status',
+      ],
       trace: 'aggregated every run in the workspace',
       answer: () => {
         const s = S();
@@ -1024,14 +1068,14 @@ export function buildConsoleBot(store) {
     name: 'Agentline Console',
     initials: 'AC',
     tag: 'Workspace console',
-    greeting: 'Ask about the workspace: run health, failures, escalations, cost, connections, guardrails or any single agent.',
-    suggestions: ['How is the workspace doing?', 'What failed?', 'Where is the cost going?', 'Which connections are down?'],
+    greeting: 'I read the whole workspace rather than one agent: run health, what failed, what was escalated, where the cost goes, which connections are down, which agent is busiest, the workflows and any single agent by name.',
+    suggestions: CONSOLE_SUGGESTIONS,
     intents,
     fallbacks: [
-      'I could not place that. Ask about runs, agents, workflows, connections, guardrails or cost.',
-      'No match. Try "what failed", "which agent is busiest" or "where is the cost going".',
-      'That is outside what the console reads. It knows agents, runs, workflows, tools and guardrails.',
-      'Nothing matched. The console answers from the workspace records — try one of the chips.',
+      `I could not place that. Try "${CONSOLE_SUGGESTIONS[0]}" or "${CONSOLE_SUGGESTIONS[1]}".`,
+      `No match. I answer "${CONSOLE_SUGGESTIONS[2]}", "${CONSOLE_SUGGESTIONS[3]}", "Which agent is busiest?" and "What is slow?".`,
+      'That is outside what the console reads. Ask about agents, runs, workflows, connections, guardrails or cost.',
+      'Nothing matched. Ask "What happened recently?" or "How does this work?" and I will pull it from the workspace records.',
     ],
     note: 'Demo console — answers are matched locally against sample data. No model, no network.',
     context: () => ({ state: store.state }),

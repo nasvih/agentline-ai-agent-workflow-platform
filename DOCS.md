@@ -26,6 +26,7 @@ index.html
    └── src/main.js                  store · nav · router · shell · console agent
           ├── src/data.js           seed + lookups (imported by everything)
           ├── src/agent.js          intent packs + guardrail engine
+          ├── src/selftest.js       suggestion routing check
           └── src/views/*.js        render(ctx) -> Node, one module per screen
 ```
 
@@ -89,7 +90,8 @@ Cost is held in paise as an integer and rendered by `rupees()`. The demo token r
 |---|---|
 | `src/main.js` | Store creation, nav definition, hash router, sidebar and mobile menu, About and shortcut modals, reset, the global console agent, go-to key handling. |
 | `src/data.js` | `seedState()` and every lookup helper (`agentById`, `toolById`, `guardById`, `workflowById`, `guardActive`, `estimateCost`, `rupees`, `newRunId`), plus `MODELS` and the status-to-pill maps. |
-| `src/agent.js` | `wrapIntent` (the guardrail engine), the four packs, the shared intents, `packFor`, `buildAgentBot`, `buildConsoleBot`, `redactText`, `GUARDRAIL_PROBES`. |
+| `src/agent.js` | `wrapIntent` (the guardrail engine), the four packs, the shared intents, `packFor`, `buildAgentBot`, `buildConsoleBot`, `redactText`, `CONSOLE_SUGGESTIONS`, `AGENT_SUGGESTIONS`, `GUARDRAIL_PROBES`. |
+| `src/selftest.js` | Routes every suggestion chip and guardrail probe through `Assistant._route` and asserts none reaches the fallback. |
 | `src/views/agents.js` | Card grid, detail drawer, create/edit modal, pause/activate, delete. |
 | `src/views/playground.js` | Agent picker, `Assistant.mountInto`, the run inspector rail, guardrail probes. |
 | `src/views/workflows.js` | Workflow list, node editor, `planRun`, the streaming run log, add-step modal. |
@@ -127,13 +129,42 @@ Each agent's pack is its own function in `src/agent.js`:
 
 Every agent also gets `sharedIntents()`: what it is, its own run statistics, its tools, its
 guardrails, its cost, and a contact lookup (which exists mainly so the redaction rule has something
-to redact). Agents bound to the topic rule also get an `offTopicIntent` whose `match` is a **getter**
-over the current blocked-term list — without it, an off-topic question that matched no ordinary
-intent would slip past the topic check into the fallback line.
+to redact).
+
+Two **catcher intents** are appended last, to every agent, so they only win when nothing else does.
+Both use a `match` **getter** rather than a fixed array, so they always reflect the guardrail
+configuration as it stands right now:
+
+- `offTopicIntent` matches the current blocked-term list. Without it, an off-topic question that
+  matched no ordinary intent would slip past the topic check into the fallback line.
+- `handoverIntent` matches the current escalation trigger words, so "the customer wants a refund"
+  lands somewhere sensible even on an agent the escalation rule is not bound to.
 
 The workspace-wide **Agentline Console** (`buildConsoleBot`) has twelve of its own: health,
 failures, escalations, cost, busiest agent, connections, guardrails, workflows, latency, a named
 agent, recent activity, and how the demo works.
+
+### Suggestion chips must always route
+
+A chip the assistant cannot answer is the worst first impression the product can make, and it is the
+first thing anyone clicks. So every string that can ever appear as a chip has one source of truth —
+`CONSOLE_SUGGESTIONS`, `AGENT_SUGGESTIONS`, `DEFAULT_AGENT_SUGGESTIONS` and `GUARDRAIL_PROBES` — and
+none of them may reach the fallback.
+
+Two rules keep that true. Intents never override `suggestions` on a blocked, escalated or
+tool-gated reply, so the chips fall through to the bot's configured list rather than disappearing.
+And `src/selftest.js` checks the whole set:
+
+```js
+await agentline.selfTest()
+// -> { tested, passed, failed, agents, results, failures }
+```
+
+It routes each question through `Assistant._route` without composing an answer or writing a run, so
+it is safe to run at any time, and it covers the console, every agent in the current state
+(including agents you created in the UI, which use the generic pack) and all three guardrail probes
+against each of them. Failures are logged with the source and the question. Current state:
+**32 routed for the seeded workspace, 39 with a fifth agent added, zero failures.**
 
 ## The guardrail engine
 

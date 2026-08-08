@@ -62,6 +62,17 @@ python3 -m http.server 4105
 It must be served over HTTP — the app is made of ES modules, so opening `index.html` from the file
 system will be blocked by the browser.
 
+Every suggestion chip in the app has to route to a real answer. To check that yourself, open the
+browser console and run:
+
+```js
+await agentline.selfTest()
+// { tested: 32, passed: 32, failed: 0, agents: 4, ... }
+```
+
+It asks every chip and every guardrail probe — the console's, each agent's, and any agent you have
+created — and reports anything that would fall through to a "no match" reply.
+
 ## Deploy to GitHub Pages
 
 1. Push the repository to GitHub.
@@ -83,6 +94,7 @@ agentline/
   src/main.js             boot: store, nav, router, shell, console agent
   src/data.js             seeded demo dataset and helpers
   src/agent.js            intent packs and the guardrail engine
+  src/selftest.js         suggestion routing self-test
   src/views/agents.js
   src/views/playground.js
   src/views/workflows.js
