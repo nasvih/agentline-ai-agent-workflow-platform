@@ -357,6 +357,58 @@ body.is-framed .devgroup{display:none}
 [data-theme="dark"] .toast{border:1px solid var(--line-2)}
 [data-theme="dark"] .tile--muted{background:var(--surface-2)}
 
+/* == 17. overlay stacking ==
+   The kit gives .scrim z-index 60, but under 900px the sidebar drawer sits at
+   65 and the assistant panel at 75 — so a modal opened while either was open
+   rendered behind it and its buttons could not be reached. A modal is always
+   the topmost surface except for toasts (80) and the device frame (90). */
+.scrim{z-index:78}
+/* on a short viewport the modal body scrolls, so the actions have to stay put
+   rather than sitting below the fold of the scroll */
+@media (max-width:640px){ .modal__foot{position:sticky;bottom:0} }
+
+/* == 18. topbar fit at phone width ==
+   The About pill is the widest thing in the bar. Left alone it wrapped onto
+   two lines inside a 60px bar and squeezed the page title to one letter. */
+#aboutbtn{white-space:nowrap}
+@media (max-width:640px){ .aboutbtn__rest{display:none} }
+@media (max-width:480px){
+  /* previewing a 390px phone from a phone shows the same view twice */
+  .devgroup{display:none}
+  .topbar{padding:0 14px}
+}
+/* the notifications header held a title, a count, a bulk action and a close
+   button on one line; below this width the close button was pushed out of
+   the panel, so the bulk action takes a row of its own instead */
+@media (max-width:420px){
+  .notifpanel__head{flex-wrap:wrap}
+  .notifpanel__head h3{flex:1 1 auto;min-width:0}
+  .notifpanel__head .label{white-space:nowrap}
+  .notifpanel__head .btn--sm{order:4;flex:1 0 100%}
+}
+
+/* == 19. touch targets ==
+   Only where the sidebar is a drawer — the pointer layout above 900px keeps
+   the tighter kit sizing. Nothing here changes colour, border or radius. */
+@media (max-width:900px){
+  .btn{padding:10px 14px}
+  .btn--sm{padding:10px 12px}
+  .btn--icon,.btn--sm.btn--icon,.topbar__tools .btn--icon{width:40px;height:40px;padding:9px}
+  .chip{padding:10px 11px}
+  .navlink{padding:11px 10px}
+  .seg__btn{padding:10px 11px}
+  .backlink{padding:10px 0}
+  #aboutbtn{padding:11px 10px}
+  .devgroup .btn{width:40px;height:40px}
+  .side__brandbtns .btn{width:40px;height:40px}
+  .side__brandbtns .btn svg{width:18px;height:18px}
+  .node__acts .btn--icon{width:40px;height:40px;padding:9px}
+  .note__mark{width:38px;height:38px;padding:9px;margin-top:6px}
+  /* the remove control on a topic chip was a 16px box */
+  .topicchip{padding:2px 4px 2px 10px}
+  .topicchip button{padding:11px}
+}
+
 /* Under 900px the sidebar is a drawer, so the rail must not claim a grid
    column or strip the labels the drawer needs. Overrides the shared rules. */
 @media (max-width:900px){

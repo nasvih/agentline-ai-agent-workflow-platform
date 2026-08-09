@@ -59,7 +59,8 @@ try {
       <span class="spacer"></span>
       <!-- notifications, device preview and dark mode, filled in by src/topbar.js -->
       <div class="topbar__tools" id="topbartools"></div>
-      <button class="pill pill--amber pill--btn" id="aboutbtn" type="button" title="About this demo — what is real, where your data lives, and why the agents are simulated.">About this demo</button>
+      <!-- at phone width only the first word shows, so the page title keeps its room -->
+      <button class="pill pill--amber pill--btn" id="aboutbtn" type="button" title="About this demo — what is real, where your data lives, and why the agents are simulated.">About<span class="aboutbtn__rest">&nbsp;this demo</span></button>
       <button class="btn btn--sm" id="resetbtn">Reset demo data</button>
     </header>
     <main class="view view--pad" id="view" tabindex="-1"></main>
