@@ -15,8 +15,11 @@
 .appfoot .mono{font-size:11px;letter-spacing:.04em}
 .side-scrim{position:fixed;inset:0;background:rgba(23,24,26,.42);z-index:60}
 @media (min-width:901px){ .side-scrim{display:none} }
-/* footer rhythm: About, then the two paired rows, then the shortcuts button */
-.side__foot .btn+.btn{margin-top:8px}
+/* footer rhythm: About, then the two paired rows, then the shortcuts button.
+   Direct children only — as a descendant selector this also caught the second
+   button inside .side__pair, which sits in a flex ROW: the 8px top margin
+   pushed GitHub down and left it 8px shorter than nasvih.in beside it. */
+.side__foot>.btn+.btn{margin-top:8px}
 .side__foot>.side__pair,
 .side__foot>.side__pair+.btn{margin-top:8px}
 .side__ver{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:8px 4px 0}
