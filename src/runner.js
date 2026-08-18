@@ -14,7 +14,11 @@
    No network, no timers beyond the ones that pace the log.
    ============================================================ */
 
-import { toolById, agentById, newRunId, estimateCost } from './data.js';
+import {
+  toolById, agentById, newRunId, estimateCost,
+  toolName, agentName, agentStatusLabel, statusLabel, triggerLabel, stepName, stepDetail, outputLabel,
+} from './data.js';
+import { t } from './main.js';
 
 /* ---------- refresh bus ---------- */
 const subs = new Set();
@@ -31,28 +35,28 @@ export function planRun(state, wf) {
   const steps = [];
   for (const st of wf.steps) {
     if (!st.enabled) {
-      steps.push({ ...st, result: 'skipped', reason: 'step disabled' });
+      steps.push({ ...st, result: 'skipped', reason: t('run.stepDisabled') });
       continue;
     }
     if (st.kind === 'tool') {
       const tool = toolById(state, st.ref);
       if (tool && !tool.connected) {
-        steps.push({ ...st, result: 'failed', reason: `${tool.name} is disconnected` });
+        steps.push({ ...st, result: 'failed', reason: t('run.toolDown', { name: toolName(tool) }) });
         continue;
       }
-      steps.push({ ...st, result: 'ok', reason: `${tool ? tool.name : st.ref} responded` });
+      steps.push({ ...st, result: 'ok', reason: t('run.toolOk', { name: toolName(tool) || st.ref }) });
       continue;
     }
     if (st.kind === 'agent') {
       const a = agentById(state, st.ref);
       if (a && a.status !== 'live') {
-        steps.push({ ...st, result: 'skipped', reason: `${a.name} is ${a.status}` });
+        steps.push({ ...st, result: 'skipped', reason: t('run.agentNotLive', { name: agentName(a), status: agentStatusLabel(a.status) }) });
         continue;
       }
-      steps.push({ ...st, result: 'ok', reason: `${a ? a.name : st.ref} finished` });
+      steps.push({ ...st, result: 'ok', reason: t('run.agentOk', { name: agentName(a) || st.ref }) });
       continue;
     }
-    steps.push({ ...st, result: 'ok', reason: st.detail || 'evaluated true' });
+    steps.push({ ...st, result: 'ok', reason: stepDetail(st.detail) || t('run.evaluated') });
   }
   const failed = steps.some((s) => s.result === 'failed');
   const skipped = steps.some((s) => s.result === 'skipped');
@@ -70,11 +74,11 @@ export function executeWorkflow(store, wf, { onLine, pace = 260 } = {}) {
     const agentStep = wf.steps.find((s) => s.kind === 'agent');
     const agent = agentStep ? agentById(state, agentStep.ref) : null;
     const runId = newRunId();
-    const line = (t, msg, status) => { if (onLine) onLine(t, msg, status); };
+    const line = (clockLabel, msg, status) => { if (onLine) onLine(clockLabel, msg, status); };
 
     let clock = 0;
-    const trace = [{ label: 'Trigger fired', kind: 'system', status: 'ok', ms: 12, detail: wf.trigger.label }];
-    line('0.00s', `trigger — ${wf.trigger.label}`, 'ok');
+    const trace = [{ label: 'Trigger fired', kind: 'system', status: 'ok', ms: 12, detail: triggerLabel(wf) }];
+    line('0.00s', t('run.logTrigger', { label: triggerLabel(wf) }), 'ok');
 
     let i = 0;
     const tick = () => {
@@ -82,7 +86,7 @@ export function executeWorkflow(store, wf, { onLine, pace = 260 } = {}) {
       const st = plan.steps[i++];
       const ms = st.result === 'skipped' ? 0 : Math.round(st.avgMs * (0.6 + Math.random() * 0.9));
       clock += ms;
-      line(`${(clock / 1000).toFixed(2)}s`, `${st.name} — ${st.reason}`, st.result);
+      line(`${(clock / 1000).toFixed(2)}s`, t('run.logStep', { name: stepName(st.name), reason: st.reason }), st.result);
       trace.push({ label: st.name, kind: st.kind, status: st.result, ms, detail: st.reason });
       setTimeout(tick, pace ? pace + Math.random() * 320 : 0);
     };
@@ -92,9 +96,9 @@ export function executeWorkflow(store, wf, { onLine, pace = 260 } = {}) {
       const tokensOut = agent ? Math.round(agent.avgTokens.out * (0.8 + Math.random() * 0.5)) : 180;
       const costPaise = estimateCost(tokensIn, tokensOut);
       clock += 40;
-      trace.push({ label: 'Outputs written', kind: 'output', status: plan.status === 'success' ? 'ok' : plan.status, ms: 40, detail: wf.outputs.join(' · ') });
-      line(`${(clock / 1000).toFixed(2)}s`, `outputs — ${wf.outputs.join(', ')}`, plan.status === 'success' ? 'ok' : plan.status);
-      line(`${(clock / 1000).toFixed(2)}s`, `run ${runId} finished ${plan.status} · ${tokensIn + tokensOut} tokens`, plan.status === 'success' ? 'ok' : plan.status);
+      trace.push({ label: 'Outputs written', kind: 'output', status: plan.status === 'success' ? 'ok' : plan.status, ms: 40, detail: wf.outputs.map(outputLabel).join(' · ') });
+      line(`${(clock / 1000).toFixed(2)}s`, t('run.logOutputs', { list: wf.outputs.map(outputLabel).join(t('common.listSep')) }), plan.status === 'success' ? 'ok' : plan.status);
+      line(`${(clock / 1000).toFixed(2)}s`, t('run.logDone', { id: runId, status: statusLabel(plan.status), tokens: tokensIn + tokensOut }), plan.status === 'success' ? 'ok' : plan.status);
 
       store.update((s) => {
         const w = s.workflows.find((x) => x.id === wf.id);

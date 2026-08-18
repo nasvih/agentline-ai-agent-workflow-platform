@@ -20,7 +20,7 @@
 
 import {
   buildAgentBot, buildConsoleBot, suggestionsFor,
-  CONSOLE_SUGGESTIONS, GUARDRAIL_PROBES, ACTION_PROBES,
+  consoleSuggestions, guardrailProbes, actionProbes,
 } from './agent.js';
 
 function probe(bot, source, question, { expect = null, wantAction = false } = {}) {
@@ -51,11 +51,11 @@ export function selfTest(store, { log = true } = {}) {
 
   /* ---- console ---- */
   const consoleBot = buildConsoleBot(store);
-  CONSOLE_SUGGESTIONS.forEach((q) => {
+  consoleSuggestions().forEach((q) => {
     counts.chips += 1;
     results.push(probe(consoleBot, 'Agentline Console · chip', q));
   });
-  ACTION_PROBES.filter((p) => p.scope === 'console').forEach((p) => {
+  actionProbes().filter((p) => p.scope === 'console').forEach((p) => {
     counts.actions += 1;
     results.push(probe(consoleBot, 'Agentline Console · action', p.q, { expect: p.expect, wantAction: true }));
   });
@@ -67,11 +67,11 @@ export function selfTest(store, { log = true } = {}) {
       counts.chips += 1;
       results.push(probe(bot, `${agent.name} · chip`, q));
     });
-    GUARDRAIL_PROBES.forEach((p) => {
+    guardrailProbes().forEach((p) => {
       counts.probes += 1;
       results.push(probe(bot, `${agent.name} · probe`, p.q));
     });
-    ACTION_PROBES.filter((p) => p.scope === agent.id || p.scope === 'shared').forEach((p) => {
+    actionProbes().filter((p) => p.scope === agent.id || p.scope === 'shared').forEach((p) => {
       counts.actions += 1;
       results.push(probe(bot, `${agent.name} · action`, p.q, { expect: p.expect, wantAction: true }));
     });

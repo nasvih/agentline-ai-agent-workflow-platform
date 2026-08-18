@@ -13,25 +13,34 @@
 <meta name="apple-mobile-web-app-title" content="Agentline">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./assets/app.css">
 <link rel="stylesheet" href="./assets/agentline.css">
 <script>
-/* Theme before first paint, so a dark reader never gets a white flash.
-   Same localStorage key and same rule as src/topbar.js: an explicit
-   choice wins, otherwise follow the operating system. */
+/* Theme and language before first paint, so a dark reader never gets a
+   white flash and an Arabic reader never gets one frame of left-to-right.
+   Same localStorage keys and same rules as src/topbar.js and lib/i18n.js:
+   an explicit choice wins, otherwise the default. */
 try {
   var p = JSON.parse(localStorage.getItem('agentline.ui.v1') || '{}');
   var t = (p.theme === 'dark' || p.theme === 'light') ? p.theme
     : ('light');
   document.documentElement.setAttribute('data-theme', t);
 } catch (e) { /* private mode, first visit — the module sets it later */ }
+try {
+  var lang = localStorage.getItem('agentline.lang');
+  if (lang !== 'ar') lang = 'en';
+  document.documentElement.setAttribute('lang', lang);
+  document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+  if (lang === 'ar') document.documentElement.classList.add('ar-root');
+} catch (e) { /* the module applies it a moment later */ }
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23EAC81C'/%3E%3Cpath d='M11 22l5-12 5 12M13 18h6' stroke='%2317181A' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 </head>
 <body>
 <noscript>
   <div style="padding:24px;font-family:system-ui">Agentline is a JavaScript application. Enable JavaScript to load the demo workspace — there is no server side and no data leaves this page.</div>
+  <div lang="ar" dir="rtl" style="padding:0 24px 24px;font-family:system-ui">Agentline تطبيق يعمل بجافاسكربت. فعّل جافاسكربت لتحميل مساحة العمل التجريبية — لا يوجد جانب خادم ولا تغادر أي بيانات هذه الصفحة.</div>
 </noscript>
 
 <div class="shell" id="shell">

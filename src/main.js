@@ -2,10 +2,12 @@
    Agentline — boot: store, nav, router, shell wiring, console agent.
    ============================================================ */
 
-import { h, qs, esc, icon, createStore, router, toast, confirmDialog, modal } from '../lib/ui.js';
+import { h, qs, esc, icon, createStore, router, toast, confirmDialog, modal, setRelativeStrings, setDialogStrings } from '../lib/ui.js';
 import { initPWA } from '../lib/pwa.js';
+import { createI18n } from '../lib/i18n.js';
+import { STRINGS } from './strings.js';
 import { STORE_KEY, seedState } from './data.js';
-import { buildConsoleBot, ACTION_PROBES, SCOPE_LABEL } from './agent.js';
+import { buildConsoleBot, actionProbes, scopeLabel } from './agent.js';
 import { selfTest } from './selftest.js';
 import { initTopbar } from './topbar.js';
 import { onAppRefresh } from './runner.js';
@@ -18,23 +20,51 @@ import * as viewTools from './views/tools.js';
 import * as viewGuardrails from './views/guardrails.js';
 import * as viewSettings from './views/settings.js';
 
+/* ---------- language ----------
+   One instance for the whole app. It is built before anything else runs so
+   that every module below can import `t` and use it the moment it is
+   called. Switching language reloads the page — see lib/i18n.js. */
+const i18n = createI18n({ key: 'agentline', dict: STRINGS });
+export const t = i18n.t;
+
+/* lib/ui.js and lib/pwa.js are shared between the demo apps and hold no
+   strings of their own, so this app hands them its own. */
+setRelativeStrings({
+  justNow: t('ago.justNow'),
+  m: (n) => t('ago.m', { n }),
+  h: (n) => t('ago.h', { n }),
+  d: (n) => t('ago.d', { n }),
+});
+setDialogStrings({ confirm: t('common.confirm'), cancel: t('common.cancel') });
+
 const store = createStore(STORE_KEY, seedState);
 
 const NAV = [
-  { group: 'Build', items: [
-    { id: 'agents', label: 'Agents', icon: 'spark', key: 'a', sub: 'agents', view: viewAgents, count: (s) => s.agents.length },
-    { id: 'playground', label: 'Playground', icon: 'bolt', key: 'p', sub: 'talk to an agent', view: viewPlayground },
-    { id: 'workflows', label: 'Workflows', icon: 'flow', key: 'w', sub: 'pipelines', view: viewWorkflows, count: (s) => s.workflows.length },
+  { group: t('nav.group.build'), items: [
+    { id: 'agents', label: t('nav.agents'), icon: 'spark', key: 'a', sub: t('nav.sub.agents'), view: viewAgents, count: (s) => s.agents.length },
+    { id: 'playground', label: t('nav.playground'), icon: 'bolt', key: 'p', sub: t('nav.sub.playground'), view: viewPlayground },
+    { id: 'workflows', label: t('nav.workflows'), icon: 'flow', key: 'w', sub: t('nav.sub.workflows'), view: viewWorkflows, count: (s) => s.workflows.length },
   ] },
-  { group: 'Operate', items: [
-    { id: 'runs', label: 'Runs', icon: 'clock', key: 'r', sub: 'history and traces', view: viewRuns, count: (s) => s.runs.length },
-    { id: 'tools', label: 'Tools & connections', icon: 'grid', key: 't', sub: 'integrations', view: viewTools, count: (s) => s.tools.filter((t) => t.connected).length },
-    { id: 'guardrails', label: 'Guardrails', icon: 'shield', key: 'd', sub: 'policy', view: viewGuardrails, count: (s) => s.guardrails.filter((g) => g.enabled).length },
+  { group: t('nav.group.operate'), items: [
+    { id: 'runs', label: t('nav.runs'), icon: 'clock', key: 'r', sub: t('nav.sub.runs'), view: viewRuns, count: (s) => s.runs.length },
+    { id: 'tools', label: t('nav.tools'), icon: 'grid', key: 't', sub: t('nav.sub.tools'), view: viewTools, count: (s) => s.tools.filter((x) => x.connected).length },
+    { id: 'guardrails', label: t('nav.guardrails'), icon: 'shield', key: 'd', sub: t('nav.sub.guardrails'), view: viewGuardrails, count: (s) => s.guardrails.filter((g) => g.enabled).length },
   ] },
-  { group: 'Workspace', items: [
-    { id: 'settings', label: 'Settings', icon: 'cog', key: 's', sub: 'workspace', view: viewSettings },
+  { group: t('nav.group.workspace'), items: [
+    { id: 'settings', label: t('nav.settings'), icon: 'cog', key: 's', sub: t('nav.sub.settings'), view: viewSettings },
   ] },
 ];
+
+/* the strings that ship in index.html so the shell is readable before the
+   module loads; English is the markup default, this repaints it */
+qs('#side').setAttribute('aria-label', t('nav.group.workspace'));
+qs('#nav').setAttribute('aria-label', t('nav.group.build'));
+qs('.side__tag').textContent = t('shell.brandTag');
+qs('#menubtn').setAttribute('aria-label', t('shell.openNav'));
+qs('#aboutbtn').title = t('shell.aboutTitle');
+qs('#aboutbtn').innerHTML = `${esc(t('shell.about'))}<span class="aboutbtn__rest">&nbsp;${esc(t('shell.aboutRest').trim())}</span>`;
+qs('#resetbtn').textContent = t('shell.reset');
+qs('.appfoot span').textContent = t('shell.footNote');
 
 const ALL = NAV.flatMap((g) => g.items);
 const byId = (id) => ALL.find((x) => x.id === id) || ALL[0];
@@ -78,8 +108,8 @@ const ICON_RAIL = {
 const ICON_TONE = '<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor" stroke="none"/></svg>';
 /* the colour control names no colour anywhere — the glyph carries it, and
    aria-pressed is what reports whether the yellow tone is on */
-const TONE_LABEL = 'Sidebar colour';
-const railLabel = (railed) => (railed ? 'Expand sidebar' : 'Collapse sidebar');
+const TONE_LABEL = t('side.tone');
+const railLabel = (railed) => (railed ? t('side.expand') : t('side.collapse'));
 const ICON_OUT = '<svg viewBox="0 0 20 20"><path d="M11.5 3.5H16v4.5"/><path d="M16 3.5L9.5 10"/><path d="M14 11.5V15a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 15V7.5A1.5 1.5 0 0 1 5 6h3.5"/></svg>';
 const ICON_CODE = '<svg viewBox="0 0 20 20"><path d="M7.1 5.8L2.9 10l4.2 4.2"/><path d="M12.9 5.8L17.1 10l-4.2 4.2"/><path d="M11.4 4.1L8.6 15.9"/></svg>';
 
@@ -148,8 +178,16 @@ function applyUI() {
 const installRow = h('div', { class: 'side__pair' });
 const installBtn = initPWA({
   mount: installRow,
-  appName: 'Agentline',
+  appName: t('shell.brand'),
   onNote: (msg) => toast(msg),
+  strings: {
+    install: t('side.install'),
+    title: (app) => t('side.installTitle', { app }),
+    installed: (app) => t('side.installed', { app }),
+    dismissed: t('side.dismissed'),
+    iosHow: t('side.iosHow'),
+    browserHow: t('side.browserHow'),
+  },
 });
 
 function paintFoot() {
@@ -164,8 +202,8 @@ function paintFoot() {
   const footLink = (label, glyph, href, cls) => h('a', {
     class: `btn btn--block btn--sm${cls ? ` ${cls}` : ''}`,
     href, target: '_blank', rel: 'noopener noreferrer',
-    title: `${label} — opens in a new tab`,
-    'aria-label': `${label} — opens in a new tab`,
+    title: t('side.newTab', { label }),
+    'aria-label': t('side.newTab', { label }),
     html: `${glyph}<span>${esc(label)}</span>`,
   });
 
@@ -177,97 +215,85 @@ function paintFoot() {
      shares its row as an ordinary outline control — one inverted element in
      the footer is the point of the inverted element. */
   foot.appendChild(h('div', { class: 'side__pair' },
-    footLink('nasvih.in', ICON_OUT, 'https://www.nasvih.in', 'side__site'),
-    footLink('GitHub', ICON_CODE, REPO_URL)));
+    footLink(t('side.site'), ICON_OUT, 'https://www.nasvih.in', 'side__site'),
+    footLink(t('side.github'), ICON_CODE, REPO_URL)));
 
   /* built outside this function so the install control survives the repaint */
-  installRow.replaceChildren(footBtn('Reset demo data', icon('refresh'), resetDemo));
+  installRow.replaceChildren(footBtn(t('shell.reset'), icon('refresh'), resetDemo));
   if (installBtn) installRow.insertBefore(installBtn, installRow.firstChild);
   foot.appendChild(installRow);
 
-  foot.appendChild(footBtn('Keyboard shortcuts', icon('key'), showShortcuts));
-  foot.appendChild(h('div', { class: 'side__ver' }, 'demo build · local data only'));
+  foot.appendChild(footBtn(t('side.shortcuts'), icon('key'), showShortcuts));
+  foot.appendChild(h('div', { class: 'side__ver' }, t('side.ver')));
 }
 
 async function resetDemo() {
-  const ok = await confirmDialog(
-    'This clears every change you have made — connections, guardrail settings, workflow steps, agents you created and the run history — and rebuilds the sample workspace from the seed.',
-    { title: 'Reset demo data', okLabel: 'Reset', danger: true },
-  );
+  const ok = await confirmDialog(t('reset.body'), { title: t('reset.title'), okLabel: t('reset.ok'), danger: true });
   if (!ok) return;
   store.reset();
   /* the seed is deterministic, so the rebuilt runs carry the same ids —
      without this, everything you had already read stays read */
   ui.readNotes = [];
   saveUI();
-  toast('Demo data reset', 'ok');
+  toast(t('reset.done'), 'ok');
   render(current, [], new URLSearchParams());
 }
 
 function showAbout() {
   modal({
-    title: 'About this demo',
+    title: t('about.title'),
     width: '560px',
     body: `
       <section class="aboutblock">
-        <h4>What this is</h4>
-        <p>Agentline is a workspace for putting agents to work. You define an agent, give it the tools it is allowed to use and the guardrails it has to obey, then run it on its own or as a step inside a workflow. Every run is written down as a trace you can open afterwards and read line by line.</p>
+        <h4>${esc(t('about.h1'))}</h4>
+        <p>${esc(t('about.p1'))}</p>
       </section>
       <section class="aboutblock">
-        <h4>Where it helps a business</h4>
+        <h4>${esc(t('about.h2'))}</h4>
         <ul class="aboutlist">
-          <li>Repetitive desk work — triaging a ticket queue, reading invoices, drafting the weekly report — gets a first pass before anyone opens it.</li>
-          <li>Every run leaves a trace, so an answer can be explained: which tool was called, on what, and what came back.</li>
-          <li>Guardrails are configuration, not code. Redaction, allowed topics, escalation to a human and a cost ceiling are set by whoever owns the process.</li>
-          <li>Connections are explicit. An agent cannot touch a system nobody granted it.</li>
-          <li>When something goes wrong, the run history shows which step failed and why, instead of one blank error.</li>
+          ${t('about.li').map((x) => `<li>${esc(x)}</li>`).join('')}
         </ul>
       </section>
       <section class="aboutblock">
-        <h4>How it would work for real</h4>
-        <p>The same interface, with a real model provider behind the agents, real connections to the systems named on <strong>Tools</strong>, and the run history in a database rather than this browser. This demo simulates only that model layer, so the product itself can be judged: the interface, the traces, the guardrail behaviour and the shape of a workflow are real design decisions. The answers are not model output.</p>
+        <h4>${esc(t('about.h3'))}</h4>
+        <p>${t('about.p3')}</p>
       </section>
       <section class="aboutblock">
-        <h4>How this demo works</h4>
-        <p><strong>You can actually use it.</strong> Build workflows, add and remove steps, run them, toggle tools and guardrails, create agents, talk to them. Nothing here is read-only and nothing is a screenshot.</p>
-        <p><strong>Your data stays on your machine.</strong> Everything you enter is saved in this browser's local storage. There is no account and no backend. Clear your browser data, or use <strong>Reset demo data</strong>, and it is all gone.</p>
-        <p><strong>The agents are simulated.</strong> Every reply, tool call, token count and latency figure is generated locally from this app's demo data. No model is connected and no request leaves your browser.</p>
+        <h4>${esc(t('about.h4'))}</h4>
+        <p>${t('about.p4a')}</p>
+        <p>${t('about.p4b')}</p>
+        <p>${t('about.p4c')}</p>
       </section>
       <section class="aboutblock">
-        <h4>The agents do things, not only answer</h4>
-        <p>Ask in plain language. The agent shows what it understood and what it would touch, and applies it only when you press the button — then reports what changed, before and after. These are the exact phrases that work, and what each one does:</p>
+        <h4>${esc(t('about.h5'))}</h4>
+        <p>${esc(t('about.p5'))}</p>
         <div class="tablewrap tablewrap--scroll" style="margin-top:10px">
-          <table class="data data--grid actiontable"><thead><tr><th>Say this</th><th>Where</th><th>And it will</th></tr></thead><tbody>
-          ${ACTION_PROBES.map((p) => `<tr><td>${esc(p.q)}</td><td class="small muted">${esc(SCOPE_LABEL[p.scope] || p.scope)}</td><td class="small muted">${esc(p.does)}</td></tr>`).join('')}
+          <table class="data data--grid actiontable"><thead><tr>${t('about.th').map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>
+          ${actionProbes().map((p) => `<tr><td>${esc(p.q)}</td><td class="small muted">${esc(scopeLabel()[p.scope] || p.scope)}</td><td class="small muted">${esc(p.does)}</td></tr>`).join('')}
           </tbody></table>
         </div>
-        <p style="margin-top:10px">Every one of those writes a real record into this browser and a real trace you can open in <strong>Runs</strong>. The trace, the token counts and the latency figures are simulated locally — there is no model behind any of it.</p>
+        <p style="margin-top:10px">${t('about.p5b')}</p>
       </section>
       <section class="aboutblock">
-        <h4>The source</h4>
-        <p><a class="aboutsrc" href="${REPO_URL}" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub — opens in a new tab">${esc(REPO_URL.replace('https://', ''))}</a></p>
-        <p>The source is published so it can be read, run and evaluated — it is not open source, and copying, modifying, redistributing or using it in your own work needs the author's written permission.</p>
+        <h4>${esc(t('about.h6'))}</h4>
+        <p><a class="aboutsrc" href="${REPO_URL}" dir="ltr" target="_blank" rel="noopener noreferrer" aria-label="${esc(t('about.srcLabel'))}">${esc(REPO_URL.replace('https://', ''))}</a></p>
+        <p>${esc(t('about.p6'))}</p>
       </section>`,
-    actions: [{ label: 'Got it', class: 'btn--primary' }],
+    actions: [{ label: t('common.gotIt'), class: 'btn--primary' }],
   });
 }
 
 function showShortcuts() {
+  const row = (k, v) => `<dt dir="ltr">${esc(k)}</dt><dd>${esc(v)}</dd>`;
   modal({
-    title: 'Keyboard shortcuts',
+    title: t('shortcuts.title'),
     body: `<dl class="kv">
-      <dt>Cmd K</dt><dd>Open or close the Agentline Console</dd>
-      <dt>Esc</dt><dd>Close the console, a dialog or the mobile navigation</dd>
-      <dt>g then a</dt><dd>Agents</dd>
-      <dt>g then p</dt><dd>Playground</dd>
-      <dt>g then w</dt><dd>Workflows</dd>
-      <dt>g then r</dt><dd>Runs</dd>
-      <dt>g then t</dt><dd>Tools and connections</dd>
-      <dt>g then d</dt><dd>Guardrails</dd>
-      <dt>g then s</dt><dd>Settings</dd>
-      <dt>?</dt><dd>This list</dd>
+      ${row('Cmd K', t('shortcuts.cmdk'))}
+      ${row('Esc', t('shortcuts.esc'))}
+      ${ALL.map((i) => row(t('shortcuts.then', { k: i.key }), i.label)).join('')}
+      ${row('?', t('shortcuts.list'))}
     </dl>`,
-    actions: [{ label: 'Close', class: 'btn--primary' }],
+    actions: [{ label: t('common.close'), class: 'btn--primary' }],
   });
 }
 
@@ -290,6 +316,7 @@ qs('#aboutbtn').addEventListener('click', showAbout);
 let phoneMode = false;
 const topbar = initTopbar({
   mount: qs('#topbartools'),
+  langToggle: () => i18n.toggle(),
   store,
   prefs: ui,
   savePrefs: saveUI,
@@ -319,8 +346,8 @@ function render(route, params, query) {
   if (phoneMode) return;              // the frame owns the screen
   const item = byId(route);
   qs('#crumb').textContent = item.label;
-  qs('#crumbsub').textContent = item.sub || 'workspace';
-  document.title = `${item.label} — Agentline`;
+  qs('#crumbsub').textContent = item.sub || t('common.workspace');
+  document.title = t('shell.docTitle', { page: item.label });
   paintNav();
   setSide(false);
 
@@ -343,7 +370,7 @@ function render(route, params, query) {
     node = item.view.render(ctx);
   } catch (err) {
     node = h('div', { class: 'empty' },
-      h('h3', {}, 'This screen could not be drawn'),
+      h('h3', {}, t('shell.drawFailed')),
       h('p', {}, String(err && err.message ? err.message : err)));
   }
   viewEl.appendChild(node);

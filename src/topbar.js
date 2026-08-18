@@ -16,7 +16,9 @@
    ============================================================ */
 
 import { h, ago } from '../lib/ui.js';
-import { guardById, agentById, rupees } from './data.js';
+import { guardById, agentById, rupees, guardName, agentName, toolName } from './data.js';
+import { t } from './main.js';
+import { dataLabel } from './strings.js';
 
 const G = {
   bell: '<svg viewBox="0 0 20 20"><path d="M6 8a4 4 0 0 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8z"/><path d="M8.5 16a1.6 1.6 0 0 0 3 0"/></svg>',
@@ -38,55 +40,55 @@ const G = {
 export function buildNotes(s) {
   const out = [];
   const cap = guardById(s, 'cost');
-  const nameOf = (id) => (agentById(s, id) || {}).name || id;
+  const nameOf = (id) => agentName(agentById(s, id)) || id;
 
   (s.runs || []).forEach((r) => {
     if (r.status === 'failed') {
-      const bad = (r.trace || []).find((t) => t.status === 'failed');
+      const bad = (r.trace || []).find((ev) => ev.status === 'failed');
       out.push({
-        id: `fail:${r.id}`, kind: 'Failed run', tone: 'bad', at: r.startedAt, href: `runs/${r.id}`,
+        id: `fail:${r.id}`, kind: t('topbar.kind.failed'), tone: 'bad', at: r.startedAt, href: `runs/${r.id}`,
         title: `${nameOf(r.agentId)} — ${r.id}`,
-        detail: bad ? `${bad.label} · ${bad.detail || 'no detail recorded'}` : 'the run stopped before it finished',
+        detail: bad ? `${traceLabel(bad.label)} · ${traceDetail(bad.detail) || t('topbar.noDetail')}` : t('topbar.stoppedEarly'),
       });
     }
     if (r.status === 'escalated') {
       out.push({
-        id: `esc:${r.id}`, kind: 'Waiting for a person', tone: 'warn', at: r.startedAt, href: `runs/${r.id}`,
-        title: `${nameOf(r.agentId)} handed a conversation over`,
-        detail: `${(guardById(s, 'escalate') || {}).queue || 'the handover queue'} · nobody has picked it up in this demo`,
+        id: `esc:${r.id}`, kind: t('topbar.kind.waiting'), tone: 'warn', at: r.startedAt, href: `runs/${r.id}`,
+        title: t('topbar.handedOver', { agent: nameOf(r.agentId) }),
+        detail: t('topbar.nobodyPicked', { queue: queueName(guardById(s, 'escalate')) || t('topbar.handoverQueue') }),
       });
     }
     const blocked = (r.guardrails || []).filter((g) => g.verdict === 'blocked');
     if (blocked.length || r.status === 'blocked') {
       out.push({
-        id: `block:${r.id}`, kind: 'Guardrail block', tone: 'info', at: r.startedAt, href: `runs/${r.id}`,
-        title: `${blocked.map((g) => (guardById(s, g.id) || {}).name || g.id).join(', ') || 'A guardrail'} stopped ${r.id}`,
-        detail: `${nameOf(r.agentId)} · the reply was cut short rather than composed`,
+        id: `block:${r.id}`, kind: t('topbar.kind.block'), tone: 'info', at: r.startedAt, href: `runs/${r.id}`,
+        title: t('topbar.guardStopped', { names: blocked.map((g) => guardName(guardById(s, g.id)) || g.id).join(t('common.listSep')) || t('topbar.aGuardrail'), run: r.id }),
+        detail: t('topbar.cutShort', { agent: nameOf(r.agentId) }),
       });
     }
     if (cap && cap.enabled && r.costPaise > cap.limitPaise) {
       out.push({
-        id: `cost:${r.id}`, kind: 'Over the cost ceiling', tone: 'warn', at: r.startedAt, href: `runs/${r.id}`,
-        title: `${r.id} cost ${rupees(r.costPaise)}`,
-        detail: `the ceiling is ${rupees(cap.limitPaise)} per run — raise it in Guardrails or leave it truncating`,
+        id: `cost:${r.id}`, kind: t('topbar.kind.cost'), tone: 'warn', at: r.startedAt, href: `runs/${r.id}`,
+        title: t('topbar.runCost', { run: r.id, amount: rupees(r.costPaise) }),
+        detail: t('topbar.ceilingIs', { amount: rupees(cap.limitPaise) }),
       });
     }
   });
 
-  (s.tickets || []).filter((t) => t.status === 'escalated').forEach((t) => {
+  (s.tickets || []).filter((x) => x.status === 'escalated').forEach((x) => {
     out.push({
-      id: `tick:${t.id}`, kind: 'Waiting for a person', tone: 'warn', at: null, href: 'guardrails',
-      title: `${t.id} escalated — ${t.subject}`,
-      detail: `${t.customer} · ${t.escalationRef || 'no reference'} · ${t.assignee}`,
+      id: `tick:${x.id}`, kind: t('topbar.kind.waiting'), tone: 'warn', at: null, href: 'guardrails',
+      title: t('topbar.ticketEsc', { id: x.id, subject: ticketSubject(x.subject) }),
+      detail: `${x.customer} · ${x.escalationRef || t('topbar.noRef')} · ${x.assignee}`,
     });
   });
 
-  (s.tools || []).filter((t) => !t.connected).forEach((t) => {
-    const users = (s.agents || []).filter((a) => a.tools.includes(t.id));
+  (s.tools || []).filter((x) => !x.connected).forEach((x) => {
+    const users = (s.agents || []).filter((a) => a.tools.includes(x.id));
     out.push({
-      id: `tool:${t.id}`, kind: 'Connection down', tone: 'bad', at: null, href: 'tools',
-      title: `${t.name} is disconnected`,
-      detail: users.length ? `${users.map((a) => a.name).join(', ')} cannot use it` : 'no agent depends on it',
+      id: `tool:${x.id}`, kind: t('topbar.kind.conn'), tone: 'bad', at: null, href: 'tools',
+      title: t('topbar.toolDown', { name: toolName(x) }),
+      detail: users.length ? t('topbar.cannotUse', { names: users.map((a) => agentName(a)).join(t('common.listSep')) }) : t('topbar.noDependents'),
     });
   });
 
@@ -97,19 +99,25 @@ export function buildNotes(s) {
 
 const TONE = { bad: 'pill--bad', warn: 'pill--warn', info: 'pill--info', ok: 'pill--ok' };
 
+/* the record-side labels this file reads straight out of the store */
+const traceLabel = (v) => dataLabel(t, 'traceLabel', v);
+const traceDetail = (v) => dataLabel(t, 'traceDetail', v);
+const ticketSubject = (v) => dataLabel(t, 'subject', v);
+const queueName = (g) => dataLabel(t, 'queue', (g || {}).queue);
+
 function notifications({ store, prefs, savePrefs, navigate }) {
   if (!Array.isArray(prefs.readNotes)) prefs.readNotes = [];
 
   const badge = h('span', { class: 'notif__badge', hidden: true });
   const btn = h('button', {
     class: 'btn btn--ghost btn--icon', type: 'button', id: 'notifbtn',
-    'aria-label': 'Notifications', title: 'Notifications',
+    'aria-label': t('topbar.notifications'), title: t('topbar.notifications'),
     'aria-expanded': 'false', 'aria-haspopup': 'dialog',
     html: G.bell,
   });
   btn.appendChild(badge);
 
-  const panel = h('div', { class: 'notifpanel', role: 'dialog', 'aria-label': 'Notifications', hidden: true });
+  const panel = h('div', { class: 'notifpanel', role: 'dialog', 'aria-label': t('topbar.notifications'), hidden: true });
   const wrap = h('div', { class: 'notifwrap' }, btn, panel);
 
   let open = false;
@@ -130,7 +138,7 @@ function notifications({ store, prefs, savePrefs, navigate }) {
     const n = unreadOf(buildNotes(store.state)).length;
     badge.hidden = n === 0;
     badge.textContent = n > 9 ? '9+' : String(n);
-    btn.setAttribute('aria-label', n ? `Notifications, ${n} unread` : 'Notifications, none unread');
+    btn.setAttribute('aria-label', n ? t('topbar.unreadN', { n }) : t('topbar.noneUnread'));
     btn.title = btn.getAttribute('aria-label');
   }
 
@@ -142,26 +150,26 @@ function notifications({ store, prefs, savePrefs, navigate }) {
 
     panel.innerHTML = '';
     panel.appendChild(h('div', { class: 'notifpanel__head' },
-      h('h3', {}, 'Notifications'),
-      h('span', { class: 'label' }, unread.length ? `${unread.length} unread` : 'all read'),
+      h('h3', {}, t('topbar.notifications')),
+      h('span', { class: 'label' }, unread.length ? t('topbar.unreadCount', { n: unread.length }) : t('topbar.allRead')),
       unread.length
         ? h('button', {
           class: 'btn btn--sm', type: 'button',
           onclick: () => markRead(list.map((n) => n.id)),
-          html: `${G.check}<span>Mark all read</span>`,
+          html: `${G.check}<span>${t('topbar.markAllRead')}</span>`,
         })
         : null,
       h('button', {
-        class: 'btn btn--ghost btn--icon', type: 'button', 'aria-label': 'Close notifications',
+        class: 'btn btn--ghost btn--icon', type: 'button', 'aria-label': t('topbar.closeNotifs'), title: t('topbar.closeNotifs'),
         onclick: () => toggle(false), html: G.close,
       })));
 
     const body = h('div', { class: 'notifpanel__body' });
     if (!list.length) {
       body.appendChild(h('div', { class: 'notifempty' },
-        h('h4', {}, 'Nothing needs you'),
-        h('p', {}, 'No failed runs, no escalation waiting for a person, no guardrail blocks, nothing over the cost ceiling and every connection is up.'),
-        h('p', { class: 'small faint' }, 'Disconnect a tool or run a workflow that needs it, and this fills up.')));
+        h('h4', {}, t('topbar.emptyTitle')),
+        h('p', {}, t('topbar.emptyBody')),
+        h('p', { class: 'small faint' }, t('topbar.emptyHint'))));
     } else {
       list.forEach((n) => {
         const isRead = prefs.readNotes.includes(n.id);
@@ -172,14 +180,14 @@ function notifications({ store, prefs, savePrefs, navigate }) {
           },
           h('span', { class: 'note__top' },
             h('span', { class: `pill ${TONE[n.tone] || ''}` }, n.kind),
-            h('span', { class: 'note__when mono' }, n.at ? ago(n.at) : 'now')),
+            h('span', { class: 'note__when mono' }, n.at ? ago(n.at) : t('common.now'))),
           h('span', { class: 'note__title' }, n.title),
           h('span', { class: 'note__detail' }, n.detail)),
           isRead
-            ? h('span', { class: 'note__read label' }, 'read')
+            ? h('span', { class: 'note__read label' }, t('topbar.readMark'))
             : h('button', {
               class: 'btn btn--ghost btn--icon note__mark', type: 'button',
-              'aria-label': `Mark "${n.title}" read`, title: 'Mark read',
+              'aria-label': t('topbar.markOne', { title: n.title }), title: t('topbar.markShort'),
               onclick: () => markRead([n.id]), html: G.check,
             }));
         body.appendChild(row);
@@ -187,7 +195,7 @@ function notifications({ store, prefs, savePrefs, navigate }) {
     }
     panel.appendChild(body);
     panel.appendChild(h('div', { class: 'notifpanel__foot' },
-      'Built from the demo records in this browser. Nothing is pushed and nothing is fetched.'));
+      t('topbar.foot')));
   }
 
   function toggle(force) {
@@ -220,9 +228,9 @@ function devicePreview({ onChange }) {
     'aria-label': label, title: label, 'aria-pressed': String(name === 'desktop'),
     html: glyph,
   });
-  const phoneBtn = mk('phone', G.phone, 'Preview in a phone frame');
-  const deskBtn = mk('desktop', G.desktop, 'Desktop view');
-  const group = h('div', { class: 'devgroup', role: 'group', 'aria-label': 'Device preview' }, deskBtn, phoneBtn);
+  const phoneBtn = mk('phone', G.phone, t('topbar.phone'));
+  const deskBtn = mk('desktop', G.desktop, t('topbar.desktop'));
+  const group = h('div', { class: 'devgroup', role: 'group', 'aria-label': t('topbar.devicePreview') }, deskBtn, phoneBtn);
 
   let frame = null;
   let mode = 'desktop';
@@ -243,20 +251,20 @@ function devicePreview({ onChange }) {
     frame = h('div', { class: 'devframe' },
       h('div', { class: 'devframe__bar' },
         h('div', { style: 'min-width:0' },
-          h('div', { class: 'devframe__name' }, 'Agentline'),
-          h('div', { class: 'devframe__sub label' }, '390 × 844 · the real app in an iframe, not a picture')),
+          h('div', { class: 'devframe__name' }, t('shell.brand')),
+          h('div', { class: 'devframe__sub label', dir: 'auto' }, t('topbar.frameSub'))),
         h('button', {
           class: 'btn btn--dark', type: 'button', onclick: () => set('desktop'),
-          html: `${G.desktop}<span>Back to desktop</span>`,
+          html: `${G.desktop}<span>${t('topbar.backToDesktop')}</span>`,
         })),
       h('div', { class: 'devframe__stage' },
         h('div', { class: 'devframe__slot' },
           h('div', { class: 'devframe__phone' },
             h('iframe', {
-              class: 'devframe__view', title: 'Agentline running at phone width',
+              class: 'devframe__view', title: t('topbar.frameTitle'),
               src: `./index.html?frame=1${hash}`,
             })))),
-      h('p', { class: 'devframe__note' }, 'Same code, same local data — the frame just gives it a 390px viewport so the phone layout applies.'));
+      h('p', { class: 'devframe__note' }, t('topbar.frameNote')));
     document.body.appendChild(frame);
     window.addEventListener('resize', fit);
     fit();
@@ -290,19 +298,19 @@ function theme({ prefs, savePrefs }) {
   const media = window.matchMedia('(prefers-color-scheme: dark)');
   const btn = h('button', {
     class: 'btn btn--ghost btn--icon', type: 'button', id: 'themebtn',
-    'aria-label': 'Dark mode', title: 'Dark mode', 'aria-pressed': 'false', html: G.moon,
+    'aria-label': t('topbar.darkMode'), title: t('topbar.darkMode'), 'aria-pressed': 'false', html: G.moon,
   });
 
   const current = () => (prefs.theme === 'dark' ? 'dark' : 'light');
 
   function apply() {
-    const t = current();
-    document.documentElement.setAttribute('data-theme', t);
+    const cur = current();
+    document.documentElement.setAttribute('data-theme', cur);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', t === 'dark' ? '#141517' : '#EAC81C');
-    btn.innerHTML = t === 'dark' ? G.sun : G.moon;
-    btn.setAttribute('aria-pressed', String(t === 'dark'));
-    const label = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    if (meta) meta.setAttribute('content', cur === 'dark' ? '#141517' : '#EAC81C');
+    btn.innerHTML = cur === 'dark' ? G.sun : G.moon;
+    btn.setAttribute('aria-pressed', String(cur === 'dark'));
+    const label = cur === 'dark' ? t('topbar.toLight') : t('topbar.toDark');
     btn.setAttribute('aria-label', label);
     btn.title = label;
   }
@@ -322,14 +330,17 @@ function theme({ prefs, savePrefs }) {
 /* ============================================================
    mount
    ============================================================ */
-export function initTopbar({ mount, store, prefs, savePrefs, navigate, onPhoneMode, framed }) {
+export function initTopbar({ mount, store, prefs, savePrefs, navigate, onPhoneMode, framed, langToggle }) {
   const notif = notifications({ store, prefs, savePrefs, navigate });
   const th = theme({ prefs, savePrefs });
   mount.appendChild(notif.el);
+  /* language, then theme, then the device frame — the two that change how
+     the whole page reads sit together, ahead of the preview toy */
+  if (langToggle) mount.appendChild(langToggle());
+  mount.appendChild(th.el);
   if (!framed) {
     /* the framed copy must not offer the frame again */
     mount.appendChild(devicePreview({ onChange: onPhoneMode }).el);
   }
-  mount.appendChild(th.el);
   return { refresh: notif.refresh };
 }

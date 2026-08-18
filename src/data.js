@@ -6,6 +6,8 @@
    ============================================================ */
 
 import { seeded, between, pick, isoDay } from '../lib/ui.js';
+import { dataLabel } from './strings.js';
+import { t } from './main.js';
 
 export const STORE_KEY = 'agentline.demo.v1';
 
@@ -388,6 +390,73 @@ export const guardActive = (s, agent, id) => {
 export const rupees = (paise) => `₹${(paise / 100).toFixed(2)}`;
 export const estimateCost = (tIn, tOut) => Math.round(tIn * TOKEN_RATE.in + tOut * TOKEN_RATE.out);
 export const newRunId = () => `run_${Date.now().toString(36)}${Math.floor(Math.random() * 900 + 100)}`;
+
+/* ---------- the record side, read in the chosen language ----------
+   Every seeded record stores its English string, and that string is the
+   key. A value with no entry — a name, a company, an id, an agent someone
+   created here — comes back untouched, in Latin, which is right. */
+export const dl = (group, value) => dataLabel(t, group, value);
+
+export const toolName = (x) => (x ? dl('toolName', x.name) : undefined);
+export const toolKind = (x) => dl('toolKind', x.kind);
+export const toolAccount = (x) => dl('toolAccount', x.account);
+export const toolDesc = (x) => dl('toolDesc', x.description);
+
+export const agentName = (a) => (a ? dl('agentName', a.name) : undefined);
+export const agentPurpose = (a) => dl('agentPurpose', a.purpose);
+export const agentDesc = (a) => dl('agentDesc', a.description);
+export const agentStatusLabel = (v) => dl('agentStatus', v);
+
+export const guardName = (g) => (g ? dl('guardName', g.name) : undefined);
+export const guardSummary = (g) => dl('guardSummary', g.summary);
+export const guardDetail = (g) => dl('guardDetail', g.detail);
+export const guardQueue = (g) => dl('queue', (g || {}).queue);
+export const termLabel = (v) => dl('term', v);
+export const maskLabel = (v) => dl('mask', v);
+
+export const workflowName = (w) => (w ? dl('wfName', w.name) : undefined);
+export const workflowDesc = (w) => dl('wfDesc', w.description);
+export const triggerLabel = (w) => dl('trigLabel', w.trigger.label);
+export const triggerDetail = (w) => dl('trigDetail', w.trigger.detail);
+export const outputLabel = (v) => dl('output', v);
+export const stepName = (v) => dl('stepName', v);
+export const stepDetail = (v) => dl('stepDetail', v);
+
+export const statusLabel = (v) => dl('status', v);
+export const verdictLabel = (v) => dl('verdict', v);
+export const traceStatusLabel = (v) => dl('traceStatus', v);
+export const kindLabel = (v) => dl('kind', v);
+export const triggerName = (v) => dl('trigger', v);
+/* A trace event written by the run engine carries a step's name and a
+   step's detail, which live in their own groups. Try the trace groups
+   first, then fall through, so a workflow trace reads the same on the
+   Runs screen as it does on the Workflows screen. */
+export const traceLabel = (v) => {
+  const a = dl('traceLabel', v);
+  return a !== v ? a : dl('stepName', v);
+};
+export const traceDetail = (v) => {
+  const a = dl('traceDetail', v);
+  if (a !== v) return a;
+  const b = dl('stepDetail', v);
+  if (b !== v) return b;
+  return dl('trigLabel', v);
+};
+export const modelNote = (v) => dl('modelNote', v);
+
+export const priorityLabel = (v) => dl('priority', v);
+export const categoryLabel = (v) => dl('category', v);
+export const channelLabel = (v) => dl('channel', v);
+export const sentimentLabel = (v) => dl('sentiment', v);
+export const ticketStatusLabel = (v) => dl('ticketStatus', v);
+export const subjectLabel = (v) => dl('subject', v);
+export const invStatusLabel = (v) => dl('invStatus', v);
+export const planLabel = (v) => dl('plan', v);
+export const onboardStepLabel = (v) => dl('step', v);
+export const regionLabel = (v) => dl('region', v);
+export const envLabel = (v) => dl('env', v);
+export const settingsRegionLabel = (v) => dl('settingsRegion', v);
+export const notifyLabel = (v) => dl('notify', v);
 
 export const STATUS_PILL = {
   success: 'pill--ok', failed: 'pill--bad', escalated: 'pill--warn', blocked: 'pill--info', running: 'pill--amber',

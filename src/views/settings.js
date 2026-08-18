@@ -1,7 +1,11 @@
 /* Settings — workspace level configuration, and the reset. */
 
-import { h, icon, num, fmtDate, fmtTime, ago, toast, modal, confirmDialog, downloadCSV } from '../../lib/ui.js';
-import { MODELS, rupees, agentById } from '../data.js';
+import { h, esc, icon, num, fmtDate, fmtTime, ago, toast, modal, confirmDialog, downloadCSV } from '../../lib/ui.js';
+import {
+  MODELS, rupees, agentById,
+  agentName, modelNote, envLabel, settingsRegionLabel, notifyLabel,
+} from '../data.js';
+import { t } from '../main.js';
 
 const ENVIRONMENTS = ['sandbox', 'staging', 'production'];
 const REGIONS = ['ap-south · Mumbai', 'ap-southeast · Singapore', 'me-central · Dammam', 'eu-west · Dublin'];
@@ -16,29 +20,29 @@ export function render(ctx) {
     h('span', { class: 'field__label' }, label), control, hint ? h('span', { class: 'hint' }, hint) : null);
 
   const nameInput = h('input', { class: 'input', value: st.workspace });
-  const envSel = h('select', { class: 'select' }, ENVIRONMENTS.map((e) => h('option', { value: e, selected: e === st.environment }, e)));
-  const modelSel = h('select', { class: 'select' }, MODELS.map((m) => h('option', { value: m.id, selected: m.id === st.defaultModel }, `${m.label} — ${m.note}`)));
-  const regionSel = h('select', { class: 'select' }, REGIONS.map((r) => h('option', { value: r, selected: r === st.region }, r)));
-  const notifySel = h('select', { class: 'select' }, NOTIFY.map((n) => h('option', { value: n, selected: n === st.notifyOn }, n)));
+  const envSel = h('select', { class: 'select' }, ENVIRONMENTS.map((e) => h('option', { value: e, selected: e === st.environment }, envLabel(e))));
+  const modelSel = h('select', { class: 'select' }, MODELS.map((m) => h('option', { value: m.id, selected: m.id === st.defaultModel }, `${m.label} — ${modelNote(m.note)}`)));
+  const regionSel = h('select', { class: 'select' }, REGIONS.map((r) => h('option', { value: r, selected: r === st.region }, settingsRegionLabel(r))));
+  const notifySel = h('select', { class: 'select' }, NOTIFY.map((n) => h('option', { value: n, selected: n === st.notifyOn }, notifyLabel(n))));
   const retention = h('input', { class: 'input', type: 'number', min: '1', max: '365', value: String(st.retentionDays) });
   const sampling = h('input', { class: 'input', type: 'number', min: '1', max: '100', value: String(st.traceSampling) });
   const dist = h('input', { class: 'input', value: st.distribution });
-  const streamIn = h('input', { type: 'checkbox', checked: st.streaming, 'aria-label': 'Stream replies word by word' });
+  const streamIn = h('input', { type: 'checkbox', checked: st.streaming, 'aria-label': t('settingsView.stream') });
 
   form.append(
     h('div', { class: 'grid g2' },
-      field('Workspace name', nameInput),
-      field('Environment', envSel, 'Cosmetic in the demo — it only labels the workspace.'),
-      field('Default model for new agents', modelSel),
-      field('Region', regionSel, 'Where runs would execute.'),
-      field('Run retention (days)', retention, 'History in this demo is also capped at 90 entries.'),
-      field('Trace sampling (%)', sampling, 'Share of runs that keep a full trace.'),
-      field('Notify on', notifySel),
-      field('Report distribution list', dist)),
+      field(t('settingsView.fName'), nameInput),
+      field(t('settingsView.fEnv'), envSel, t('settingsView.envHint')),
+      field(t('settingsView.fModel'), modelSel),
+      field(t('settingsView.fRegion'), regionSel, t('settingsView.regionHint')),
+      field(t('settingsView.fRetention'), retention, t('settingsView.retentionHint')),
+      field(t('settingsView.fSampling'), sampling, t('settingsView.samplingHint')),
+      field(t('settingsView.fNotify'), notifySel),
+      field(t('settingsView.fDist'), dist)),
     h('div', { class: 'field' },
       h('label', { class: 'switch' }, streamIn, h('span', { class: 'switch__track' }),
-        h('span', {}, 'Stream replies word by word')),
-      h('span', { class: 'hint' }, 'Turn this off and the agent still answers — the flag is written into every run trace.')),
+        h('span', {}, t('settingsView.stream'))),
+      h('span', { class: 'hint' }, t('settingsView.streamHint'))),
     h('div', { class: 'btnrow', style: 'margin-top:16px' },
       h('button', {
         class: 'btn btn--primary',
@@ -56,12 +60,12 @@ export function render(ctx) {
               streaming: streamIn.checked,
             });
           });
-          toast('Settings saved', 'ok');
+          toast(t('settingsView.saved'), 'ok');
           ctx.refresh();
         },
-        html: `${icon('check')}<span>Save settings</span>`,
+        html: `${icon('check')}<span>${esc(t('settingsView.saveBtn'))}</span>`,
       }),
-      h('button', { class: 'btn', onclick: () => ctx.refresh() }, 'Discard changes')),
+      h('button', { class: 'btn', onclick: () => ctx.refresh() }, t('settingsView.discard'))),
   );
 
   const exportAll = () => {
@@ -69,77 +73,77 @@ export function render(ctx) {
       ['agent', 'model', 'status', 'tools', 'guardrails', 'runs_30d', 'success_rate'],
       ...s.agents.map((a) => [a.name, a.model, a.status, a.tools.join(' '), a.guardrails.join(' '), a.runs30d, a.successRate]),
     ]);
-    toast('Agent list downloaded', 'ok');
+    toast(t('settingsView.exported'), 'ok');
   };
 
   const wipe = async () => {
     const ok = await confirmDialog(
-      'This rebuilds the whole sample workspace from the seed and drops every change you have made here.',
-      { title: 'Reset demo data', danger: true, okLabel: 'Reset everything' },
+      t('settingsView.wipeBody'),
+      { title: t('reset.title'), danger: true, okLabel: t('settingsView.wipeOk') },
     );
     if (!ok) return;
     ctx.store.reset();
-    toast('Demo data reset', 'ok');
+    toast(t('reset.done'), 'ok');
     ctx.refresh();
   };
 
   return h('div', {},
     h('div', { class: 'page-head' },
       h('div', { style: 'flex:1;min-width:240px' },
-        h('h1', {}, 'Settings'),
-        h('p', {}, 'Workspace level configuration. Everything is stored in this browser under one localStorage key — there is no account and no server.'))),
+        h('h1', {}, t('settingsView.title')),
+        h('p', {}, t('settingsView.lede')))),
 
     h('div', { class: 'grid g-side' },
       h('div', { class: 'card' },
-        h('div', { class: 'card__head' }, h('h3', {}, 'Workspace')),
+        h('div', { class: 'card__head' }, h('h3', {}, t('settingsView.workspace'))),
         form),
 
       h('div', { class: 'stack' },
         h('div', { class: 'card' },
-          h('div', { class: 'card__head' }, h('h3', {}, 'What is in here')),
+          h('div', { class: 'card__head' }, h('h3', {}, t('settingsView.whatsHere'))),
           h('dl', { class: 'kv' },
-            h('dt', {}, 'Agents'), h('dd', {}, String(s.agents.length)),
-            h('dt', {}, 'Workflows'), h('dd', {}, String(s.workflows.length)),
-            h('dt', {}, 'Connections'), h('dd', {}, `${s.tools.filter((t) => t.connected).length} of ${s.tools.length} up`),
-            h('dt', {}, 'Guardrails'), h('dd', {}, `${s.guardrails.filter((g) => g.enabled).length} of ${s.guardrails.length} on`),
-            h('dt', {}, 'Runs held'), h('dd', {}, num(s.runs.length)),
-            h('dt', {}, 'Spend'), h('dd', {}, rupees(s.runs.reduce((t, r) => t + r.costPaise, 0))),
-            h('dt', {}, 'Records'), h('dd', {}, `${s.tickets.length} tickets · ${s.invoices.length} invoices · ${s.accounts.length} accounts`),
-            h('dt', {}, 'Seeded'), h('dd', {}, fmtDate(s.createdAt))),
+            h('dt', {}, t('settingsView.kAgents')), h('dd', {}, String(s.agents.length)),
+            h('dt', {}, t('settingsView.kWorkflows')), h('dd', {}, String(s.workflows.length)),
+            h('dt', {}, t('settingsView.kConnections')), h('dd', {}, t('settingsView.connectionsUp', { n: s.tools.filter((x) => x.connected).length, total: s.tools.length })),
+            h('dt', {}, t('settingsView.kGuardrails')), h('dd', {}, t('settingsView.guardsOn', { n: s.guardrails.filter((g) => g.enabled).length, total: s.guardrails.length })),
+            h('dt', {}, t('settingsView.kRuns')), h('dd', {}, num(s.runs.length)),
+            h('dt', {}, t('settingsView.kSpend')), h('dd', {}, rupees(s.runs.reduce((sum, r) => sum + r.costPaise, 0))),
+            h('dt', {}, t('settingsView.kRecords')), h('dd', {}, t('settingsView.records', { t: s.tickets.length, i: s.invoices.length, a: s.accounts.length })),
+            h('dt', {}, t('settingsView.kSeeded')), h('dd', {}, fmtDate(s.createdAt))),
           h('div', { class: 'btnrow', style: 'margin-top:14px' },
-            h('button', { class: 'btn btn--sm', onclick: exportAll, html: `${icon('download')}<span>Export agents CSV</span>` }))),
+            h('button', { class: 'btn btn--sm', onclick: exportAll, html: `${icon('download')}<span>${esc(t('settingsView.exportAgents'))}</span>` }))),
 
         h('div', { class: 'card' },
           h('div', { class: 'card__head' },
-            h('h3', {}, 'Stored reports'),
-            h('span', { class: 'label' }, `${(s.reports || []).length} held`)),
+            h('h3', {}, t('settingsView.stored')),
+            h('span', { class: 'label' }, t('settingsView.heldN', { n: (s.reports || []).length }))),
           (s.reports || []).length
             ? h('div', { class: 'stack' }, (s.reports || []).map((r) => h('div', { class: 'stored' },
               h('div', { style: 'flex:1;min-width:0' },
                 h('div', { class: 'stored__title' }, r.title),
-                h('div', { class: 'small muted' }, `${r.id} · ${(agentById(s, r.agentId) || {}).name || r.agentId} · ${ago(r.createdAt)}`)),
+                h('div', { class: 'small muted' }, t('settingsView.reportSub', { id: r.id, agent: agentName(agentById(s, r.agentId)) || r.agentId, when: ago(r.createdAt) }))),
               h('button', {
                 class: 'btn btn--sm',
                 onclick: () => modal({
                   title: r.title,
                   width: '560px',
                   body: h('div', {},
-                    h('div', { class: 'label', style: 'margin-bottom:8px' }, `${r.id} · written ${fmtDate(r.createdAt)} ${fmtTime(r.createdAt)}`),
+                    h('div', { class: 'label', style: 'margin-bottom:8px' }, t('settingsView.writtenAt', { id: r.id, date: fmtDate(r.createdAt), time: fmtTime(r.createdAt) })),
                     h('div', { class: 'stored__body' }, r.body),
-                    h('p', { class: 'hint', style: 'margin-top:12px' }, 'Composed locally from the workbook figures in this demo. No model wrote it and nothing was mailed.')),
-                  actions: [{ label: 'Close', class: 'btn--primary' }],
+                    h('p', { class: 'hint', style: 'margin-top:12px' }, t('settingsView.reportNote'))),
+                  actions: [{ label: t('common.close'), class: 'btn--primary' }],
                 }),
-              }, 'Read'))))
-            : h('p', { class: 'muted small' }, 'Nothing stored yet. Open the Report Writer in the Playground and ask it to generate and store this week\'s report — it lands here with a run in the history.')),
+              }, t('common.read')))))
+            : h('p', { class: 'muted small' }, t('settingsView.noReports'))),
 
         h('div', { class: 'card' },
-          h('div', { class: 'card__head' }, h('h3', {}, 'How the answers are made')),
-          h('p', { class: 'muted small' }, 'No model is involved anywhere in this application. A question is matched against a list of regular expressions, the winning intent reads the sample records held in this page, and the reply is composed from them. The word-by-word streaming, the tool calls in the inspector and the run traces are simulated so the product reads the way it would with a model behind it.'),
-          h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Nothing is fetched from any host. The only external request the page makes is the font stylesheet in the document head.')),
+          h('div', { class: 'card__head' }, h('h3', {}, t('settingsView.howAnswers'))),
+          h('p', { class: 'muted small' }, t('settingsView.howA')),
+          h('p', { class: 'muted small', style: 'margin-top:8px' }, t('settingsView.howB'))),
 
         h('div', { class: 'card' },
-          h('div', { class: 'card__head' }, h('h3', {}, 'Danger zone')),
-          h('p', { class: 'muted small' }, 'Resets connections, guardrail configuration, workflow steps, agents you created and the whole run history.'),
+          h('div', { class: 'card__head' }, h('h3', {}, t('settingsView.danger'))),
+          h('p', { class: 'muted small' }, t('settingsView.dangerBody')),
           h('div', { class: 'btnrow', style: 'margin-top:12px' },
-            h('button', { class: 'btn btn--danger', onclick: wipe, html: `${icon('refresh')}<span>Reset demo data</span>` }))))));
+            h('button', { class: 'btn btn--danger', onclick: wipe, html: `${icon('refresh')}<span>${esc(t('shell.reset'))}</span>` }))))));
 }
